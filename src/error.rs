@@ -4,9 +4,13 @@ pub struct Error {
 }
 
 impl Error {
-    pub fn new(why: &String) -> Error {
+    pub fn from_string(why: &String) -> Error {
+        return Error { why: why.clone() };
+    }
+
+    pub fn from_str(why: &str) -> Error {
         return Error {
-            why: why.clone()
+            why: why.to_string(),
         };
     }
 }

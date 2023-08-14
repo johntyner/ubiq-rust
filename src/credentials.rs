@@ -21,7 +21,7 @@ impl Credentials {
         path: Option<String>,
         prof: Option<String>,
     ) -> Result<Credentials> {
-        Err(Error::new(&"not implemented".to_string()))
+        Err(Error::from_str("not implemented"))
     }
 
     pub fn new_explicit(
@@ -30,7 +30,7 @@ impl Credentials {
         srsa: String,
         host: Option<String>,
     ) -> Result<Credentials> {
-        Err(Error::new(&"not implemented".to_string()))
+        Err(Error::from_str("not implemented"))
     }
 
     fn papi(&self) -> Option<String> {
