@@ -4,7 +4,7 @@ build b test t:
 	$(QUIET)cargo $(@)
 
 fmt:
-	$(QUIET)find src -name "*.rs" -exec rustfmt {} \;
+	$(QUIET)find src tests -name "*.rs" -exec rustfmt {} \;
 
 devclean:
 	$(QUIET)find . -name "*~" -exec rm -f {} \;
