@@ -11,6 +11,33 @@ pub struct Credentials {
 }
 
 impl Credentials {
+    fn get_default_filepath() -> Result<String> {
+        let path: String;
+
+        match dirs::home_dir() {
+            None => {
+                return Err(Error::from_str(
+                    "unable to determine home directory",
+                ));
+            }
+            Some(mut home) => {
+                home.push(".ubiq");
+                home.push("credentials");
+
+                match home.to_str() {
+                    None => {
+                        return Err(Error::from_str(
+                            "unable to convert path to string, non-UTF-8?",
+                        ));
+                    }
+                    Some(fp) => path = fp.to_string(),
+                }
+            }
+        }
+
+        Ok(path)
+    }
+
     fn construct() -> Credentials {
         return Credentials {
             params: std::collections::HashMap::new(),
@@ -18,17 +45,35 @@ impl Credentials {
     }
 
     pub fn new(
-        path: Option<String>,
-        prof: Option<String>,
+        opt_path: Option<String>,
+        opt_prof: Option<String>,
     ) -> Result<Credentials> {
+        let path: String;
+        let prof: String;
+
+        match opt_path {
+            Some(p) => path = p,
+            None => {
+                match Self::get_default_filepath() {
+                    Ok(p) => path = p,
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+
+        match opt_prof {
+            Some(p) => prof = p,
+            None => prof = "default".to_string(),
+        }
+
         Err(Error::from_str("not implemented"))
     }
 
-    pub fn new_explicit(
+    pub fn create(
         papi: String,
         sapi: String,
         srsa: String,
-        host: Option<String>,
+        opt_host: Option<String>,
     ) -> Result<Credentials> {
         Err(Error::from_str("not implemented"))
     }
