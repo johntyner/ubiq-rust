@@ -1,6 +1,6 @@
 QUIET	:= @
 
-build test:
+build b test t:
 	$(QUIET)cargo $(@)
 
 fmt:
