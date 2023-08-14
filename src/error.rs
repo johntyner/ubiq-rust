@@ -4,8 +4,8 @@ pub struct Error {
 }
 
 impl Error {
-    pub fn from_string(why: &String) -> Error {
-        return Error { why: why.clone() };
+    pub fn from_string(why: String) -> Error {
+        return Error { why: why };
     }
 
     pub fn from_str(why: &str) -> Error {

@@ -30,7 +30,7 @@ impl Credentials {
                             "unable to convert path to string, non-UTF-8?",
                         ));
                     }
-                    Some(fp) => path = fp.to_string(),
+                    Some(ref fp) => path = fp.to_string(),
                 }
             }
         }
@@ -48,22 +48,31 @@ impl Credentials {
         opt_path: Option<String>,
         opt_prof: Option<String>,
     ) -> Result<Credentials> {
+        let mut ini = configparser::ini::Ini::new_cs();
+
         let path: String;
         let prof: String;
+        let conf: &std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, Option<String>>,
+        >;
 
         match opt_path {
             Some(p) => path = p,
-            None => {
-                match Self::get_default_filepath() {
-                    Ok(p) => path = p,
-                    Err(e) => return Err(e),
-                }
-            }
+            None => match Self::get_default_filepath() {
+                Ok(p) => path = p,
+                Err(e) => return Err(e),
+            },
         }
 
         match opt_prof {
             Some(p) => prof = p,
             None => prof = "default".to_string(),
+        }
+
+        match ini.load(path.as_str()) {
+            Err(ref s) => return Err(Error::from_string(s.clone())),
+            Ok(ref map) => conf = map,
         }
 
         Err(Error::from_str("not implemented"))
@@ -73,24 +82,41 @@ impl Credentials {
         papi: String,
         sapi: String,
         srsa: String,
-        opt_host: Option<String>,
+        opt_host: Option<&String>,
     ) -> Result<Credentials> {
-        Err(Error::from_str("not implemented"))
+        let mut c = Self::construct();
+        let mut host: String;
+
+        match opt_host {
+            None => host = "api.ubiqsecurity.com".to_string(),
+            Some(h) => host = h.clone(),
+        }
+
+        if !host.starts_with("http://") && !host.starts_with("https://") {
+            host.insert_str(0, "https://");
+        }
+
+        c.params.insert(PAPI_ID.to_string(), papi);
+        c.params.insert(SAPI_ID.to_string(), sapi);
+        c.params.insert(SRSA_ID.to_string(), srsa);
+        c.params.insert(HOST_ID.to_string(), host);
+
+        Ok(c)
     }
 
-    fn papi(&self) -> Option<String> {
-        return self.params.get(PAPI_ID).cloned();
+    fn papi(&self) -> Option<&String> {
+        return self.params.get(PAPI_ID);
     }
 
-    fn sapi(&self) -> Option<String> {
-        return self.params.get(SAPI_ID).cloned();
+    fn sapi(&self) -> Option<&String> {
+        return self.params.get(SAPI_ID);
     }
 
-    fn srsa(&self) -> Option<String> {
-        return self.params.get(SRSA_ID).cloned();
+    fn srsa(&self) -> Option<&String> {
+        return self.params.get(SRSA_ID);
     }
 
-    fn host(&self) -> Option<String> {
-        return self.params.get(HOST_ID).cloned();
+    fn host(&self) -> Option<&String> {
+        return self.params.get(HOST_ID);
     }
 }
