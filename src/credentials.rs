@@ -10,6 +10,8 @@ const ENV_PREFIX: &str = "UBIQ_";
 
 const SERVER: &str = "api.ubiqsecurity.com";
 
+const MAX_CREDENTIALS_SIZE: u64 = 1024;
+
 pub struct Credentials {
     params: std::collections::HashMap<String, String>,
 }
@@ -68,14 +70,14 @@ impl Credentials {
         c
     }
 
-    fn from_file(path: &String, prof: &String) -> Result<Credentials> {
+    fn from_string(input: String, prof: &String) -> Result<Credentials> {
         let mut c = Self::construct();
         let mut ini = configparser::ini::Ini::new_cs();
 
         // todo separate loading from file and parsing so that
         // parsing can be unit tested more easily
-        match ini.load(path.as_str()) {
-            Err(ref s) => return Err(Error::from_string(s.clone())),
+        match ini.read(input) {
+            Err(s) => return Err(Error::from_string(s)),
             Ok(profs) => match profs.get(prof) {
                 None => {
                     return Err(Error::from_str("specified profile not found"))
@@ -108,6 +110,25 @@ impl Credentials {
         }
 
         Ok(c)
+    }
+
+    fn from_file(path: &String, prof: &String) -> Result<Credentials> {
+        match std::fs::metadata(path) {
+            Err(e) => return Err(Error::from_string(e.to_string())),
+            Ok(m) => {
+                if m.len() > MAX_CREDENTIALS_SIZE {
+                    return Err(Error::from_str("credentials file too big"));
+                }
+            }
+        }
+
+        match std::fs::read(path) {
+            Err(e) => Err(Error::from_string(e.to_string())),
+            Ok(v) => match String::from_utf8(v) {
+                Err(e) => Err(Error::from_string(e.to_string())),
+                Ok(s) => Self::from_string(s, prof),
+            },
+        }
     }
 
     pub fn new(
