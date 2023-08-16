@@ -211,17 +211,62 @@ mod tests {
     use super::Client;
     use super::Credentials;
 
-    #[test]
-    fn debug() {
-        let creds = Credentials::create(
+    #[derive(serde::Deserialize)]
+    struct HttpbinResponse {
+        data: String,
+    }
+
+    fn new_client() -> Client {
+        Client::new(&Credentials::create(
             "abc".to_string(),
             "xyz".to_string(),
             "123".to_string(),
             None,
-        );
-        let client = Client::new(&creds);
+        ))
+    }
 
-        let res = client.get(&format!("https://httpbin.org/"));
+    #[test]
+    fn get() {
+        let res = new_client().get(&"https://httpbin.org/get".to_string());
         assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
+
+        let rsp = res.unwrap();
+        assert!(rsp.status() == reqwest::StatusCode::OK);
+    }
+
+    fn upload(
+        upload_fn: fn(
+            &Client,
+            &String,
+            String,
+            String,
+        ) -> super::Result<super::Response>,
+        path: &str,
+    ) {
+        let payload = "{ \"key\": \"value\" }".to_string();
+
+        let res = upload_fn(
+            &new_client(),
+            &format!("{}{}", "https://httpbin.org", path),
+            "application/json".to_string(),
+            payload.clone(),
+        );
+        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
+
+        let rsp = res.unwrap();
+        assert!(rsp.status() == reqwest::StatusCode::OK);
+
+        let body: HttpbinResponse = rsp.json().unwrap();
+        assert!(body.data == payload);
+    }
+
+    #[test]
+    fn post() {
+        upload(Client::post, &"/post");
+    }
+
+    #[test]
+    fn patch() {
+        upload(Client::patch, &"/patch");
     }
 }
