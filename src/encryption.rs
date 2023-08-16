@@ -32,21 +32,23 @@ struct EncryptionKey {
     uses: EncryptionKeyUses,
 }
 
-struct Encryption {
+struct Encryption<'a> {
     client: Client,
     host: String,
 
     session: String,
 
     key: EncryptionKey,
+
+    algo: &'a super::algorithm::Algorithm<'a>,
 }
 
 const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
 
 fn support_unwrap_data_key(
     wdk: &[u8],
-    epk: &String,
-    srsa: &String,
+    epk: &str,
+    srsa: &str,
 ) -> core::result::Result<Vec<u8>, openssl::error::ErrorStack> {
     let mut raw: Vec<u8> = Vec::new();
 
@@ -64,11 +66,7 @@ fn support_unwrap_data_key(
     Ok(raw)
 }
 
-fn unwrap_data_key(
-    wdk: &String,
-    epk: &String,
-    srsa: &String,
-) -> Result<Vec<u8>> {
+fn unwrap_data_key(wdk: &str, epk: &str, srsa: &str) -> Result<Vec<u8>> {
     let w = super::base64::decode(wdk)?;
     match support_unwrap_data_key(&w[..], epk, srsa) {
         Err(e) => Err(Error::from_string(e.to_string())),
@@ -76,7 +74,7 @@ fn unwrap_data_key(
     }
 }
 
-impl Encryption {
+impl Encryption<'_> {
     pub fn new(creds: &Credentials, uses: u32) -> Result<Encryption> {
         let client = Client::new(&creds);
         let host = creds.host().clone();
@@ -105,12 +103,12 @@ impl Encryption {
             session: msg.encryption_session,
 
             key: EncryptionKey {
+                enc: super::base64::decode(&msg.encrypted_data_key)?,
                 raw: unwrap_data_key(
                     &msg.wrapped_data_key,
                     &msg.encrypted_private_key,
                     &creds.srsa(),
                 )?,
-                enc: super::base64::decode(&msg.encrypted_data_key)?,
 
                 fingerprint: msg.key_fingerprint,
 
@@ -119,6 +117,8 @@ impl Encryption {
                     cur: 0,
                 },
             },
+
+            algo: super::algorithm::get_by_name(&msg.security_model.algorithm)?,
         })
     }
 
@@ -153,7 +153,7 @@ impl Encryption {
     }
 }
 
-impl Drop for Encryption {
+impl Drop for Encryption<'_> {
     fn drop(&mut self) {
         let _ = self.close();
     }
