@@ -1,5 +1,5 @@
-use super::Result;
 use super::error::Error;
+use super::Result;
 
 pub fn decode(s: &str) -> Result<Vec<u8>> {
     match openssl::base64::decode_block(s) {

@@ -98,12 +98,6 @@ impl Encryption {
             Ok(ne) => msg = ne,
         }
 
-        let raw_key = unwrap_data_key(
-            &msg.wrapped_data_key,
-            &msg.encrypted_private_key,
-            &creds.srsa(),
-        )?;
-
         Ok(Encryption {
             client: client,
             host: host,
@@ -111,8 +105,12 @@ impl Encryption {
             session: msg.encryption_session,
 
             key: EncryptionKey {
-                raw: raw_key,
-                enc: Vec::new(), //msg.encrypted_data_key,
+                raw: unwrap_data_key(
+                    &msg.wrapped_data_key,
+                    &msg.encrypted_private_key,
+                    &creds.srsa(),
+                )?,
+                enc: super::base64::decode(&msg.encrypted_data_key)?,
 
                 fingerprint: msg.key_fingerprint,
 

@@ -37,8 +37,8 @@ impl Client {
         }
     }
 
-    pub fn get(&self, urls: &String) -> Result<Response> {
-        match reqwest::Url::parse(urls.as_str()) {
+    pub fn get(&self, url: &str) -> Result<Response> {
+        match reqwest::Url::parse(url) {
             Err(e) => Err(Error::from_string(e.to_string())),
             Ok(u) => self.execute(reqwest::blocking::Request::new(
                 reqwest::Method::GET,
@@ -49,30 +49,30 @@ impl Client {
 
     pub fn post(
         &self,
-        urls: &String,
+        url: &str,
         ctype: String,
         content: String,
     ) -> Result<Response> {
-        self.upload(reqwest::Method::POST, urls, ctype, content)
+        self.upload(reqwest::Method::POST, url, ctype, content)
     }
 
     pub fn patch(
         &self,
-        urls: &String,
+        url: &str,
         ctype: String,
         content: String,
     ) -> Result<Response> {
-        self.upload(reqwest::Method::PATCH, urls, ctype, content)
+        self.upload(reqwest::Method::PATCH, url, ctype, content)
     }
 
     fn upload(
         &self,
         method: reqwest::Method,
-        urls: &String,
+        url: &str,
         ctype: String,
         content: String,
     ) -> Result<Response> {
-        match reqwest::Url::parse(urls.as_str()) {
+        match reqwest::Url::parse(url) {
             Err(e) => Err(Error::from_string(e.to_string())),
             Ok(u) => self.execute(
                 self.client
@@ -149,11 +149,7 @@ impl Client {
             hdrs.insert(
                 "Digest",
                 reqwest::header::HeaderValue::from_str(
-                    format!(
-                        "SHA-512={}",
-                        super::base64::encode(&sum)
-                    )
-                    .as_str(),
+                    format!("SHA-512={}", super::base64::encode(&sum)).as_str(),
                 )
                 .unwrap(),
             );
