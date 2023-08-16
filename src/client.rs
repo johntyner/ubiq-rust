@@ -8,7 +8,7 @@ use sha2::Digest;
 
 type Response = reqwest::blocking::Response;
 
-struct Client {
+pub(super) struct Client {
     client: reqwest::blocking::Client,
 
     papi: String,
@@ -79,6 +79,7 @@ impl Client {
                 self.client
                     .request(method, u)
                     .header("Content-Type", ctype)
+                    .header("Content-Length", content.len())
                     .body(content)
                     .build()
                     .unwrap(),
@@ -163,8 +164,8 @@ impl Client {
         let mut dig =
             hmac::Hmac::<sha2::Sha512>::new_from_slice(self.sapi.as_bytes())
                 .unwrap();
-        sign_header(&mut dig, &mut headers, "(request-target)", &reqtgt);
         sign_header(&mut dig, &mut headers, "(created)", &created);
+        sign_header(&mut dig, &mut headers, "(request-target)", &reqtgt);
         for h in ["Content-Length", "Content-Type", "Date", "Digest", "Host"] {
             match req.headers().get(h) {
                 None => (),
@@ -210,6 +211,8 @@ impl Client {
 mod tests {
     use super::Client;
     use super::Credentials;
+    use super::Response;
+    use super::Result;
 
     #[derive(serde::Deserialize)]
     struct HttpbinResponse {
@@ -218,9 +221,9 @@ mod tests {
 
     fn new_client() -> Client {
         Client::new(&Credentials::create(
-            "abc".to_string(),
-            "xyz".to_string(),
-            "123".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
             None,
         ))
     }
@@ -235,12 +238,7 @@ mod tests {
     }
 
     fn upload(
-        upload_fn: fn(
-            &Client,
-            &String,
-            String,
-            String,
-        ) -> super::Result<super::Response>,
+        upload_fn: fn(&Client, &String, String, String) -> Result<Response>,
         path: &str,
     ) {
         let payload = "{ \"key\": \"value\" }".to_string();
