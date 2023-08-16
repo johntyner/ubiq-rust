@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+
+mod client;
 pub mod credentials;
 pub mod error;
 

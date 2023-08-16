@@ -6,7 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# MIT
 dirs = "5.0.1"
-# MIT or LGPL 3.0
 configparser = "3.0.2"
+reqwest = { version = "0.11.18", features = [ "blocking" ] }
+chrono = "0.4.26"
+sha2 = "0.10.7"
+base64 = "0.21.2"
+hmac = "0.12.1"

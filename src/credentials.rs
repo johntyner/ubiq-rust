@@ -180,12 +180,12 @@ impl Credentials {
             }
         }
 
-        Self::create(
+        Ok(Self::create(
             creds.params.remove(&PAPI_ID.to_string()).unwrap(),
             creds.params.remove(&SAPI_ID.to_string()).unwrap(),
             creds.params.remove(&SRSA_ID.to_string()).unwrap(),
             creds.params.remove(&HOST_ID.to_string()),
-        )
+        ))
     }
 
     pub fn create(
@@ -193,7 +193,7 @@ impl Credentials {
         sapi: String,
         srsa: String,
         opt_host: Option<String>,
-    ) -> Result<Credentials> {
+    ) -> Credentials {
         let mut c = Self::construct();
         let mut host: String;
 
@@ -211,7 +211,7 @@ impl Credentials {
         c.params.insert(SRSA_ID.to_string(), srsa);
         c.params.insert(HOST_ID.to_string(), host);
 
-        Ok(c)
+        c
     }
 
     fn merge(&mut self, other: Credentials, which: &[&str]) {
@@ -225,19 +225,19 @@ impl Credentials {
         }
     }
 
-    fn papi(&self) -> &String {
+    pub(crate) fn papi(&self) -> &String {
         return self.params.get(PAPI_ID).unwrap();
     }
 
-    fn sapi(&self) -> &String {
+    pub(crate) fn sapi(&self) -> &String {
         return self.params.get(SAPI_ID).unwrap();
     }
 
-    fn srsa(&self) -> &String {
+    pub(crate) fn srsa(&self) -> &String {
         return self.params.get(SRSA_ID).unwrap();
     }
 
-    fn host(&self) -> &String {
+    pub(crate) fn host(&self) -> &String {
         return self.params.get(HOST_ID).unwrap();
     }
 }
