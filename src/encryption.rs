@@ -3,8 +3,6 @@ use super::credentials::Credentials;
 use super::error::Error;
 use super::Result;
 
-use base64::Engine;
-
 #[derive(serde::Deserialize)]
 struct NewEncryptionResponseSecurityModel {
     algorithm: String,
@@ -46,7 +44,7 @@ struct Encryption {
 const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
 
 fn support_unwrap_data_key(
-    wdk: &String,
+    wdk: &[u8],
     epk: &String,
     srsa: &String,
 ) -> core::result::Result<Vec<u8>, openssl::error::ErrorStack> {
@@ -61,12 +59,7 @@ fn support_unwrap_data_key(
     pk_ctx.decrypt_init()?;
     pk_ctx.set_rsa_oaep_md(&openssl::md::Md::sha1())?;
     pk_ctx.set_rsa_padding(openssl::rsa::Padding::PKCS1_OAEP)?;
-    pk_ctx.decrypt_to_vec(
-        &base64::engine::general_purpose::STANDARD
-            .decode(wdk)
-            .unwrap()[..],
-        &mut raw,
-    )?;
+    pk_ctx.decrypt_to_vec(wdk, &mut raw)?;
 
     Ok(raw)
 }
@@ -76,7 +69,8 @@ fn unwrap_data_key(
     epk: &String,
     srsa: &String,
 ) -> Result<Vec<u8>> {
-    match support_unwrap_data_key(wdk, epk, srsa) {
+    let w = super::base64::decode(wdk)?;
+    match support_unwrap_data_key(&w[..], epk, srsa) {
         Err(e) => Err(Error::from_string(e.to_string())),
         Ok(k) => Ok(k),
     }

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub mod base64;
 pub(crate) mod client;
 pub mod credentials;
 pub mod encryption;

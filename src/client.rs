@@ -2,7 +2,6 @@ use super::credentials::Credentials;
 use super::error::Error;
 use super::Result;
 
-use base64::Engine;
 use hmac::Mac;
 use sha2::Digest;
 
@@ -152,7 +151,7 @@ impl Client {
                 reqwest::header::HeaderValue::from_str(
                     format!(
                         "SHA-512={}",
-                        base64::engine::general_purpose::STANDARD.encode(sum)
+                        super::base64::encode(&sum)
                     )
                     .as_str(),
                 )
@@ -191,8 +190,7 @@ impl Client {
                         self.papi,
                         created,
                         headers.join(" "),
-                        base64::engine::general_purpose::STANDARD
-                            .encode(sum.into_bytes()),
+                        super::base64::encode(&sum.into_bytes()),
                     )
                     .as_str(),
                 )
