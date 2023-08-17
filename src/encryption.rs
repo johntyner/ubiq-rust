@@ -1,6 +1,10 @@
+use super::algorithm;
+use super::algorithm::Algorithm;
 use super::client::Client;
 use super::credentials::Credentials;
 use super::error::Error;
+use super::header::Header;
+use super::support;
 use super::Result;
 
 #[derive(serde::Deserialize)]
@@ -40,8 +44,8 @@ struct Encryption<'a> {
 
     key: EncryptionKey,
 
-    algo: &'a super::algorithm::Algorithm<'a>,
-    ctx: Option<super::support::CipherCtx>,
+    algo: &'a Algorithm<'a>,
+    ctx: Option<support::CipherCtx>,
 }
 
 const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
@@ -75,8 +79,8 @@ impl Encryption<'_> {
             session: msg.encryption_session,
 
             key: EncryptionKey {
-                enc: super::support::base64_decode(&msg.encrypted_data_key)?,
-                raw: super::support::unwrap_data_key(
+                enc: support::base64_decode(&msg.encrypted_data_key)?,
+                raw: support::unwrap_data_key(
                     &msg.wrapped_data_key,
                     &msg.encrypted_private_key,
                     creds.srsa(),
@@ -90,7 +94,7 @@ impl Encryption<'_> {
                 },
             },
 
-            algo: super::algorithm::get_by_name(&msg.security_model.algorithm)?,
+            algo: algorithm::get_by_name(&msg.security_model.algorithm)?,
             ctx: None,
         })
     }
@@ -103,13 +107,12 @@ impl Encryption<'_> {
         }
 
         let mut iv = Vec::<u8>::with_capacity(self.algo.len.iv);
-        super::support::getrandom(&mut iv[..])?;
+        support::getrandom(&mut iv[..])?;
 
-        let hdr =
-            super::header::Header::new(0, self.algo.id, &iv, &self.key.enc);
-
+        let hdr = Header::new(0, self.algo.id, &iv, &self.key.enc);
         let vhdr = hdr.serialize();
-        self.ctx = Some(super::support::encryption_init(
+
+        self.ctx = Some(support::encryption_init(
             &self.algo,
             &self.key.raw,
             &iv,
