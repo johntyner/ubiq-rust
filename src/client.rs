@@ -149,7 +149,7 @@ impl Client {
             hdrs.insert(
                 "Digest",
                 reqwest::header::HeaderValue::from_str(
-                    format!("SHA-512={}", super::support::base64_encode(&sum))
+                    format!("SHA-512={}", super::support::base64::encode(&sum))
                         .as_str(),
                 )
                 .unwrap(),
@@ -187,7 +187,7 @@ impl Client {
                         self.papi,
                         created,
                         headers.join(" "),
-                        super::support::base64_encode(&sum.into_bytes()),
+                        super::support::base64::encode(&sum.into_bytes()),
                     )
                     .as_str(),
                 )

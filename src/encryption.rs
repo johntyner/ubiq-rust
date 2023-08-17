@@ -79,7 +79,7 @@ impl Encryption<'_> {
             session: msg.encryption_session,
 
             key: EncryptionKey {
-                enc: support::base64_decode(&msg.encrypted_data_key)?,
+                enc: support::base64::decode(&msg.encrypted_data_key)?,
                 raw: support::unwrap_data_key(
                     &msg.wrapped_data_key,
                     &msg.encrypted_private_key,
@@ -112,7 +112,7 @@ impl Encryption<'_> {
         let hdr = Header::new(0, self.algo.id, &iv, &self.key.enc);
         let vhdr = hdr.serialize();
 
-        self.ctx = Some(support::encryption_init(
+        self.ctx = Some(support::encryption::init(
             &self.algo,
             &self.key.raw,
             &iv,
