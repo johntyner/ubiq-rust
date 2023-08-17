@@ -75,7 +75,7 @@ impl Encryption<'_> {
             session: msg.encryption_session,
 
             key: EncryptionKey {
-                enc: super::base64::decode(&msg.encrypted_data_key)?,
+                enc: super::support::base64_decode(&msg.encrypted_data_key)?,
                 raw: super::support::unwrap_data_key(
                     &msg.wrapped_data_key,
                     &msg.encrypted_private_key,
