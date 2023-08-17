@@ -41,42 +41,14 @@ struct Encryption<'a> {
     key: EncryptionKey,
 
     algo: &'a super::algorithm::Algorithm<'a>,
+    ctx: Option<super::support::CipherCtx>,
 }
 
 const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
 
-fn support_unwrap_data_key(
-    wdk: &[u8],
-    epk: &str,
-    srsa: &str,
-) -> core::result::Result<Vec<u8>, openssl::error::ErrorStack> {
-    let mut raw: Vec<u8> = Vec::new();
-
-    let pk = openssl::pkey::PKey::private_key_from_pem_passphrase(
-        epk.as_bytes(),
-        srsa.as_bytes(),
-    )?;
-
-    let mut pk_ctx = openssl::pkey_ctx::PkeyCtx::new(&pk)?;
-    pk_ctx.decrypt_init()?;
-    pk_ctx.set_rsa_oaep_md(&openssl::md::Md::sha1())?;
-    pk_ctx.set_rsa_padding(openssl::rsa::Padding::PKCS1_OAEP)?;
-    pk_ctx.decrypt_to_vec(wdk, &mut raw)?;
-
-    Ok(raw)
-}
-
-fn unwrap_data_key(wdk: &str, epk: &str, srsa: &str) -> Result<Vec<u8>> {
-    let w = super::base64::decode(wdk)?;
-    match support_unwrap_data_key(&w[..], epk, srsa) {
-        Err(e) => Err(Error::from_string(e.to_string())),
-        Ok(k) => Ok(k),
-    }
-}
-
 impl Encryption<'_> {
-    pub fn new(creds: &Credentials, uses: u32) -> Result<Encryption> {
-        let client = Client::new(&creds);
+    pub fn new<'a>(creds: &Credentials, uses: u32) -> Result<Encryption<'a>> {
+        let client = Client::new(creds);
         let host = creds.host().clone();
 
         let rsp = client.post(
@@ -104,10 +76,10 @@ impl Encryption<'_> {
 
             key: EncryptionKey {
                 enc: super::base64::decode(&msg.encrypted_data_key)?,
-                raw: unwrap_data_key(
+                raw: super::support::unwrap_data_key(
                     &msg.wrapped_data_key,
                     &msg.encrypted_private_key,
-                    &creds.srsa(),
+                    creds.srsa(),
                 )?,
 
                 fingerprint: msg.key_fingerprint,
@@ -119,7 +91,34 @@ impl Encryption<'_> {
             },
 
             algo: super::algorithm::get_by_name(&msg.security_model.algorithm)?,
+            ctx: None,
         })
+    }
+
+    pub fn begin(&mut self) -> Result<Vec<u8>> {
+        if self.ctx.is_some() {
+            return Err(Error::from_str("encryption already in progress"));
+        } else if self.key.uses.cur >= self.key.uses.max {
+            return Err(Error::from_str("encryption key has expired"));
+        }
+
+        let mut iv = Vec::<u8>::with_capacity(self.algo.len.iv);
+        super::support::getrandom(&mut iv[..])?;
+
+        let hdr =
+            super::header::Header::new(0, self.algo.id, &iv, &self.key.enc);
+
+        let vhdr = hdr.serialize();
+        self.ctx = Some(super::support::encryption_init(
+            &self.algo,
+            &self.key.raw,
+            &iv,
+            &vhdr,
+        )?);
+
+        self.key.uses.cur += 1;
+
+        Ok(vhdr)
     }
 
     pub fn close(&mut self) -> Result<()> {
@@ -130,7 +129,7 @@ impl Encryption<'_> {
         self.key.uses.max = 0;
 
         if cur < max {
-            self.client.patch(
+            let rsp = self.client.patch(
                 &format!(
                     "{}/{}/{}/{}",
                     self.host,
@@ -147,6 +146,13 @@ impl Encryption<'_> {
                     max, cur,
                 ),
             )?;
+
+            if !rsp.status().is_success() {
+                return Err(Error::from_string(format!(
+                    "failed to update encryption key: {}",
+                    rsp.status().as_str()
+                )));
+            }
         }
 
         Ok(())
@@ -164,7 +170,7 @@ mod tests {
     use super::Encryption;
     use crate::credentials::Credentials;
 
-    fn new_encryption(uses: u32) -> Encryption {
+    fn new_encryption<'a>(uses: u32) -> Encryption<'a> {
         let res = Credentials::new(None, None);
         unsafe {
             assert!(res.is_ok(), "{}", res.unwrap_err_unchecked().to_string());

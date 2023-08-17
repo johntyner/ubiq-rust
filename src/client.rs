@@ -232,7 +232,7 @@ mod tests {
     }
 
     fn upload(
-        upload_fn: fn(&Client, &String, String, String) -> Result<Response>,
+        upload_fn: fn(&Client, &str, String, String) -> Result<Response>,
         path: &str,
     ) {
         let payload = "{ \"key\": \"value\" }".to_string();

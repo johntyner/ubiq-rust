@@ -1,17 +1,17 @@
 use super::error::Error;
 use super::Result;
 
-struct AlgorithmLengths {
-    key: u32,
-    iv: u32,
-    tag: u32,
+pub struct AlgorithmLengths {
+    pub key: usize,
+    pub iv: usize,
+    pub tag: usize,
 }
 
 pub struct Algorithm<'a> {
-    id: usize,
-    name: &'a str,
+    pub id: usize,
+    pub name: &'a str,
 
-    len: AlgorithmLengths,
+    pub len: AlgorithmLengths,
 }
 
 const ALGORITHM: &'static [Algorithm] = &[
@@ -44,8 +44,10 @@ pub fn get_by_id(id: usize) -> Result<&'static Algorithm<'static>> {
 }
 
 pub fn get_by_name(name: &str) -> Result<&'static Algorithm<'static>> {
+    let n = name.to_lowercase();
+
     for a in ALGORITHM {
-        if name == a.name {
+        if n == a.name {
             return Ok(a);
         }
     }
