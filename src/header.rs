@@ -4,16 +4,16 @@ pub struct Header<'a> {
     version: usize,
     flags: usize,
     algorithm: usize,
-    iv: &'a Vec<u8>,
-    key: &'a Vec<u8>,
+    iv: &'a [u8],
+    key: &'a [u8],
 }
 
 impl Header<'_> {
     pub fn new<'a>(
         flags: usize,
         algorithm: usize,
-        iv: &'a Vec<u8>,
-        key: &'a Vec<u8>,
+        iv: &'a [u8],
+        key: &'a [u8],
     ) -> Header<'a> {
         Header {
             version: 0,
@@ -40,7 +40,36 @@ impl Header<'_> {
         v
     }
 
-    pub fn deserialize<'a>(_v: &'a [u8]) -> super::Result<Header<'a>> {
-        Err(super::Error::from_str("not implemented"))
+    pub fn can_deserialize(v: &[u8]) -> super::Result<usize> {
+        if v.len() > 0 && v[0] != 0 {
+            return Err(super::Error::from_str("invalid header version"));
+        }
+
+        if v.len() < 6 {
+            return Ok(0);
+        }
+
+        let ivlen: u8 = v[3];
+        let keylen: u16 = ((v[4] << 8) as u16) | (v[5] as u16);
+        let hsize: usize = 6 + ivlen as usize + keylen as usize;
+
+        if v.len() < hsize {
+            return Ok(0);
+        }
+
+        Ok(hsize)
+    }
+
+    pub fn deserialize<'a>(v: &'a [u8]) -> super::Result<Header<'a>> {
+        let ivlen = v[3] as usize;
+        let keylen = (((v[4] << 8) as u16) | (v[5] as u16)) as usize;
+
+        Ok(Header {
+            version: v[0] as usize,
+            flags: v[1] as usize,
+            algorithm: v[2] as usize,
+            iv: &v[6..(6 + ivlen)],
+            key: &v[(6 + ivlen)..(6 + ivlen + keylen)],
+        })
     }
 }
