@@ -1,4 +1,4 @@
-use super::error::Error;
+use super::Error;
 use super::Result;
 
 pub mod base64;

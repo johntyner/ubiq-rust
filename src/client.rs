@@ -1,5 +1,5 @@
 use super::credentials::Credentials;
-use super::error::Error;
+use super::Error;
 use super::Result;
 
 type Response = reqwest::blocking::Response;

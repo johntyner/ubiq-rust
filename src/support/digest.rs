@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::Error;
 use crate::Result;
 
 pub struct DigestCtx {

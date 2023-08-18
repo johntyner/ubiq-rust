@@ -1,4 +1,4 @@
-use super::error::Error;
+use super::Error;
 use super::Result;
 
 const PAPI_ID: &str = "ACCESS_KEY_ID";

@@ -41,6 +41,6 @@ impl Header<'_> {
     }
 
     pub fn deserialize<'a>(_v: &'a [u8]) -> super::Result<Header<'a>> {
-        Err(super::error::Error::from_str("not implemented"))
+        Err(super::Error::from_str("not implemented"))
     }
 }

@@ -2,9 +2,9 @@ use super::algorithm;
 use super::algorithm::Algorithm;
 use super::client::Client;
 use super::credentials::Credentials;
-use super::error::Error;
 use super::header::Header;
 use super::support;
+use super::Error;
 use super::Result;
 
 #[derive(serde::Deserialize)]
