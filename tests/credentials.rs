@@ -3,9 +3,7 @@ mod tests {
         #[test]
         fn default_new() {
             let r = ubiq::credentials::Credentials::new(None, None);
-            unsafe {
-                assert!(r.is_ok(), "{}", r.unwrap_err_unchecked().to_string());
-            }
+            assert!(r.is_ok(), "{}", r.unwrap_err().to_string());
         }
 
         #[test]

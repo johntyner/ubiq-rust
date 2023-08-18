@@ -24,11 +24,13 @@ struct NewEncryptionResponse {
     security_model: NewEncryptionResponseSecurityModel,
 }
 
+#[derive(Debug)]
 struct EncryptionKeyUses {
     max: usize,
     cur: usize,
 }
 
+#[derive(Debug)]
 struct EncryptionKey {
     raw: Vec<u8>,
     enc: Vec<u8>,
@@ -36,6 +38,7 @@ struct EncryptionKey {
     uses: EncryptionKeyUses,
 }
 
+#[derive(Debug)]
 struct Encryption<'a> {
     client: Client,
     host: String,
@@ -45,7 +48,7 @@ struct Encryption<'a> {
     key: EncryptionKey,
 
     algo: &'a Algorithm<'a>,
-    ctx: Option<support::CipherCtx>,
+    ctx: Option<support::CipherCtx<'a>>,
 }
 
 const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
@@ -106,7 +109,8 @@ impl Encryption<'_> {
             return Err(Error::from_str("encryption key has expired"));
         }
 
-        let mut iv = Vec::<u8>::with_capacity(self.algo.len.iv);
+        let mut iv = Vec::<u8>::new();
+        iv.resize(self.algo.len.iv, 0);
         support::getrandom(&mut iv[..])?;
 
         let hdr = Header::new(0, self.algo.id, &iv, &self.key.enc);
@@ -116,12 +120,31 @@ impl Encryption<'_> {
             &self.algo,
             &self.key.raw,
             &iv,
-            &vhdr,
+            Some(&vhdr),
         )?);
 
         self.key.uses.cur += 1;
 
         Ok(vhdr)
+    }
+
+    pub fn update(&mut self, pt: &[u8]) -> Result<Vec<u8>> {
+        if self.ctx.is_none() {
+            return Err(Error::from_str("encryption not yet started"));
+        }
+
+        support::encryption::update(self.ctx.as_mut().unwrap(), pt)
+    }
+
+    pub fn end(&mut self) -> Result<Vec<u8>> {
+        if self.ctx.is_none() {
+            return Err(Error::from_str("encryption not yet started"));
+        }
+
+        let res = support::encryption::finalize(self.ctx.as_mut().unwrap());
+        self.ctx = None;
+
+        return res;
     }
 
     pub fn close(&mut self) -> Result<()> {
@@ -168,6 +191,17 @@ impl Drop for Encryption<'_> {
     }
 }
 
+pub fn encrypt(c: &Credentials, pt: &[u8]) -> Result<Vec<u8>> {
+    let mut enc = Encryption::new(&c, 1)?;
+    let mut ct: Vec<u8>;
+
+    ct = enc.begin()?;
+    ct.extend(enc.update(pt)?);
+    ct.extend(enc.end()?);
+
+    Ok(ct)
+}
+
 #[cfg(test)]
 mod tests {
     use super::Encryption;
@@ -175,15 +209,11 @@ mod tests {
 
     fn new_encryption<'a>(uses: u32) -> Encryption<'a> {
         let res = Credentials::new(None, None);
-        unsafe {
-            assert!(res.is_ok(), "{}", res.unwrap_err_unchecked().to_string());
-        }
-        let creds = res.unwrap();
+        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
 
-        let res = Encryption::new(&creds, uses);
-        unsafe {
-            assert!(res.is_ok(), "{}", res.unwrap_err_unchecked().to_string());
-        }
+        let res = Encryption::new(&res.unwrap(), uses);
+        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
+
         res.unwrap()
     }
 
@@ -191,6 +221,15 @@ mod tests {
     fn no_encryption() {
         let mut enc = new_encryption(1);
         let res = enc.close();
+        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
+    }
+
+    #[test]
+    fn simple_encryption() {
+        let res = Credentials::new(None, None);
+        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
+
+        let res = super::encrypt(&res.unwrap(), &vec![1, 2, 3][..]);
         assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
     }
 }

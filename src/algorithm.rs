@@ -1,12 +1,14 @@
 use super::error::Error;
 use super::Result;
 
+#[derive(Debug)]
 pub struct AlgorithmLengths {
     pub key: usize,
     pub iv: usize,
     pub tag: usize,
 }
 
+#[derive(Debug)]
 pub struct Algorithm<'a> {
     pub id: usize,
     pub name: &'a str,

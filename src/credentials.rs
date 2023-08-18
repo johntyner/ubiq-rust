@@ -10,8 +10,9 @@ const ENV_PREFIX: &str = "UBIQ_";
 
 const SERVER: &str = "api.ubiqsecurity.com";
 
-const MAX_CREDENTIALS_SIZE: u64 = 1024;
+const MAX_CREDENTIALS_SIZE: usize = 1024;
 
+#[derive(Debug)]
 pub struct Credentials {
     params: std::collections::HashMap<String, String>,
 }
@@ -116,7 +117,7 @@ impl Credentials {
         match std::fs::metadata(path) {
             Err(e) => return Err(Error::from_string(e.to_string())),
             Ok(m) => {
-                if m.len() > MAX_CREDENTIALS_SIZE {
+                if m.len() > MAX_CREDENTIALS_SIZE as u64 {
                     return Err(Error::from_str("credentials file too big"));
                 }
             }

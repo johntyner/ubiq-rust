@@ -7,6 +7,7 @@ use sha2::Digest;
 
 type Response = reqwest::blocking::Response;
 
+#[derive(Debug)]
 pub(super) struct Client {
     client: reqwest::blocking::Client,
 
