@@ -3,14 +3,12 @@ pub fn init<'a>(
     key: &[u8],
     iv: &[u8],
     aad: Option<&[u8]>,
-) -> super::Result<super::CipherCtx<'a>> {
-    let mut ctx = super::CipherCtx::new(algo)?;
+) -> super::Result<super::cipher::CipherCtx<'a>> {
+    let mut ctx = super::cipher::CipherCtx::new(algo)?;
 
     let res = ctx.ctx.encrypt_init(Some(ctx.cipher), Some(key), Some(iv));
     if res.is_err() {
-        return Err(super::Error::from_string(
-            res.unwrap_err().to_string(),
-        ));
+        return Err(super::Error::from_string(res.unwrap_err().to_string()));
     }
 
     if algo.len.tag != 0 && aad.is_some() {
@@ -26,7 +24,7 @@ pub fn init<'a>(
 }
 
 pub fn update(
-    ctx: &mut super::CipherCtx,
+    ctx: &mut super::cipher::CipherCtx,
     pt: &[u8],
 ) -> super::Result<Vec<u8>> {
     let mut ct = Vec::<u8>::new();
@@ -37,7 +35,7 @@ pub fn update(
     }
 }
 
-pub fn finalize(ctx: &mut super::CipherCtx) -> super::Result<Vec<u8>> {
+pub fn finalize(ctx: &mut super::cipher::CipherCtx) -> super::Result<Vec<u8>> {
     let mut ct = Vec::<u8>::new();
 
     match ctx.ctx.cipher_final_vec(&mut ct) {

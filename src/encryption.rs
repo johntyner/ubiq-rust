@@ -48,7 +48,7 @@ struct Encryption<'a> {
     key: EncryptionKey,
 
     algo: &'a Algorithm<'a>,
-    ctx: Option<support::CipherCtx<'a>>,
+    ctx: Option<support::cipher::CipherCtx<'a>>,
 }
 
 const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";

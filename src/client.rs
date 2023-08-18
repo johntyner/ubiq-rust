@@ -2,9 +2,6 @@ use super::credentials::Credentials;
 use super::error::Error;
 use super::Result;
 
-use hmac::Mac;
-use sha2::Digest;
-
 type Response = reqwest::blocking::Response;
 
 #[derive(Debug)]
@@ -16,16 +13,18 @@ pub(super) struct Client {
 }
 
 pub fn sign_header(
-    digest: &mut hmac::Hmac<sha2::Sha512>,
+    digest: &mut crate::support::hmac::HmacCtx,
     headers: &mut Vec<String>,
     header: &str,
     value: &str,
-) {
+) -> Result<()> {
     let lh = header.to_lowercase();
     let m = format!("{}: {}\n", lh, value);
 
-    digest.update(m.as_bytes());
+    digest.update(m.as_bytes())?;
     headers.push(lh);
+
+    Ok(())
 }
 
 impl Client {
@@ -113,7 +112,7 @@ impl Client {
             Some(q) => reqtgt = format!("{}?{}", reqtgt, q),
         }
 
-        let mut dig = sha2::Sha512::new();
+        let mut digest = super::support::digest::DigestCtx::new("sha512")?;
         match req.body() {
             None => (),
             Some(body) => match body.as_bytes() {
@@ -122,10 +121,10 @@ impl Client {
                         "streaming requests not supported",
                     ));
                 }
-                Some(b) => dig.update(b),
+                Some(b) => digest.update(b)?,
             },
         }
-        let sum = dig.finalize();
+        let sum = digest.finalize()?;
 
         /* scope changes to the headers */
         {
@@ -158,20 +157,24 @@ impl Client {
         }
 
         let mut headers = Vec::<String>::new();
-        let mut dig =
-            hmac::Hmac::<sha2::Sha512>::new_from_slice(self.sapi.as_bytes())
-                .unwrap();
-        sign_header(&mut dig, &mut headers, "(created)", &created);
-        sign_header(&mut dig, &mut headers, "(request-target)", &reqtgt);
+        let mut hmac =
+            crate::support::hmac::HmacCtx::new("sha512", self.sapi.as_bytes())?;
+        sign_header(&mut hmac, &mut headers, "(created)", &created)?;
+        sign_header(&mut hmac, &mut headers, "(request-target)", &reqtgt)?;
         for h in ["Content-Length", "Content-Type", "Date", "Digest", "Host"] {
             match req.headers().get(h) {
                 None => (),
                 Some(v) => {
-                    sign_header(&mut dig, &mut headers, h, v.to_str().unwrap());
+                    sign_header(
+                        &mut hmac,
+                        &mut headers,
+                        h,
+                        v.to_str().unwrap(),
+                    )?;
                 }
             }
         }
-        let sum = dig.finalize();
+        let sum = hmac.finalize()?;
 
         {
             let hdrs = req.headers_mut();
@@ -188,7 +191,7 @@ impl Client {
                         self.papi,
                         created,
                         headers.join(" "),
-                        super::support::base64::encode(&sum.into_bytes()),
+                        super::support::base64::encode(&sum),
                     )
                     .as_str(),
                 )
@@ -217,9 +220,9 @@ mod tests {
 
     fn new_client() -> Client {
         Client::new(&Credentials::create(
-            "".to_string(),
-            "".to_string(),
-            "".to_string(),
+            "abc".to_string(),
+            "xyz".to_string(),
+            "123".to_string(),
             None,
         ))
     }
