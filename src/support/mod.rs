@@ -1,6 +1,9 @@
 use super::error::Error;
 use super::Result;
 
+pub mod base64;
+pub mod encryption;
+
 pub struct CipherCtx<'a> {
     algo: &'a super::algorithm::Algorithm<'a>,
     cipher: &'a openssl::cipher::CipherRef,
@@ -40,81 +43,6 @@ impl CipherCtx<'_> {
             cipher: c,
             ctx: ctx,
         })
-    }
-}
-
-pub mod base64 {
-    pub fn decode(s: &str) -> super::Result<Vec<u8>> {
-        match openssl::base64::decode_block(s) {
-            Err(e) => Err(super::Error::from_string(e.to_string())),
-            Ok(v) => Ok(v),
-        }
-    }
-
-    pub fn encode(v: &[u8]) -> String {
-        openssl::base64::encode_block(v)
-    }
-}
-
-pub mod encryption {
-    pub fn init<'a>(
-        algo: &'a super::super::algorithm::Algorithm<'a>,
-        key: &[u8],
-        iv: &[u8],
-        aad: Option<&[u8]>,
-    ) -> super::Result<super::CipherCtx<'a>> {
-        let mut ctx = super::CipherCtx::new(algo)?;
-
-        let res = ctx.ctx.encrypt_init(Some(ctx.cipher), Some(key), Some(iv));
-        if res.is_err() {
-            return Err(super::Error::from_string(
-                res.unwrap_err().to_string(),
-            ));
-        }
-
-        if algo.len.tag != 0 && aad.is_some() {
-            let res = ctx.ctx.cipher_update(aad.unwrap(), None);
-            if res.is_err() {
-                return Err(super::Error::from_string(
-                    res.unwrap_err().to_string(),
-                ));
-            }
-        }
-
-        Ok(ctx)
-    }
-
-    pub fn update(
-        ctx: &mut super::CipherCtx,
-        pt: &[u8],
-    ) -> super::Result<Vec<u8>> {
-        let mut ct = Vec::<u8>::new();
-
-        match ctx.ctx.cipher_update_vec(pt, &mut ct) {
-            Err(e) => Err(super::Error::from_string(e.to_string())),
-            Ok(_) => Ok(ct),
-        }
-    }
-
-    pub fn finalize(ctx: &mut super::CipherCtx) -> super::Result<Vec<u8>> {
-        let mut ct = Vec::<u8>::new();
-
-        match ctx.ctx.cipher_final_vec(&mut ct) {
-            Err(e) => return Err(super::Error::from_string(e.to_string())),
-            Ok(s) => {
-                if ctx.ctx.tag_length() > 0 {
-                    ct.resize(s + ctx.ctx.tag_length(), 0);
-                    let res = ctx.ctx.tag(&mut ct[s..]);
-                    if res.is_err() {
-                        return Err(super::Error::from_string(
-                            res.unwrap_err().to_string(),
-                        ));
-                    }
-                }
-            }
-        }
-
-        Ok(ct)
     }
 }
 
