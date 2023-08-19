@@ -211,8 +211,8 @@ impl Client {
 mod tests {
     use super::Client;
     use super::Response;
-    use crate::result::Result;
     use crate::credentials::Credentials;
+    use crate::result::Result;
 
     #[derive(serde::Deserialize)]
     struct HttpbinResponse {
