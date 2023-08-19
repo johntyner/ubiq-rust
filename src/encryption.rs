@@ -39,7 +39,7 @@ struct EncryptionKey {
 }
 
 #[derive(Debug)]
-struct Encryption<'a> {
+pub struct Encryption<'a> {
     client: Client,
     host: String,
 
@@ -196,6 +196,13 @@ impl Encryption<'_> {
 
         Ok(())
     }
+
+    pub fn cipher(&mut self, pt: &[u8]) -> Result<Vec<u8>> {
+        let mut ct = self.begin()?;
+        ct.extend(self.update(pt)?);
+        ct.extend(self.end()?);
+        Ok(ct)
+    }
 }
 
 impl Drop for Encryption<'_> {
@@ -205,44 +212,9 @@ impl Drop for Encryption<'_> {
 }
 
 pub fn encrypt(c: &Credentials, pt: &[u8]) -> Result<Vec<u8>> {
-    let mut enc = Encryption::new(&c, 1)?;
-    let mut ct: Vec<u8>;
-
-    ct = enc.begin()?;
-    ct.extend(enc.update(pt)?);
-    ct.extend(enc.end()?);
-
-    Ok(ct)
+    Encryption::new(&c, 1)?.cipher(&pt)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Encryption;
-    use crate::credentials::Credentials;
-
-    fn new_encryption<'a>(uses: u32) -> Encryption<'a> {
-        let res = Credentials::new(None, None);
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-
-        let res = Encryption::new(&res.unwrap(), uses);
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-
-        res.unwrap()
-    }
-
-    #[test]
-    fn no_encryption() {
-        let mut enc = new_encryption(1);
-        let res = enc.close();
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-    }
-
-    #[test]
-    fn simple_encryption() {
-        let res = Credentials::new(None, None);
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-
-        let res = super::encrypt(&res.unwrap(), &vec![1, 2, 3][..]);
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-    }
 }

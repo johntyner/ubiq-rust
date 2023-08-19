@@ -253,6 +253,13 @@ impl Decryption<'_> {
             None => Ok(()),
         }
     }
+
+    pub fn cipher(&mut self, ct: &[u8]) -> Result<Vec<u8>> {
+        let mut pt = self.begin()?;
+        pt.extend(self.update(ct)?);
+        pt.extend(self.end()?);
+        Ok(pt)
+    }
 }
 
 impl Drop for Decryption<'_> {
@@ -262,81 +269,61 @@ impl Drop for Decryption<'_> {
 }
 
 pub fn decrypt(c: &Credentials, ct: &[u8]) -> Result<Vec<u8>> {
-    let mut dec = Decryption::new(&c)?;
-    let mut pt: Vec<u8>;
-
-    pt = dec.begin()?;
-    pt.extend(dec.update(ct)?);
-    pt.extend(dec.end()?);
-
-    Ok(pt)
+    Decryption::new(&c)?.cipher(&ct)
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn simple_decrypt() -> super::super::Result<()> {
-        let creds = super::super::credentials::Credentials::new(None, None)?;
-
+    fn reuse_session() -> super::super::Result<()> {
         let pt = b"abc";
-        let ct = super::super::encryption::encrypt(&creds, &pt[..])?;
-        let rec = super::super::decryption::decrypt(&creds, &ct)?;
 
+        let creds = super::super::credentials::Credentials::new(None, None)?;
+        let ct = super::super::encryption::encrypt(&creds, &pt[..])?;
+        let mut dec = super::Decryption::new(&creds)?;
+
+        let rec = dec.cipher(&ct)?;
         assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
+        let fp1 = dec.session.as_ref().unwrap().key.fingerprint.clone();
+        let s1 = dec.session.as_ref().unwrap()
+            as *const super::DecryptionSession<'_>;
+
+        let rec = dec.cipher(&ct)?;
+        assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
+        let fp2 = dec.session.as_ref().unwrap().key.fingerprint.clone();
+        let s2 = dec.session.as_ref().unwrap()
+            as *const super::DecryptionSession<'_>;
+
+        /*
+         * we really want to compare the session.id, but
+         * the server is currently returning `null` in that
+         * field which in unhelpful.
+         */
+        assert!(fp1 == fp2 && s1 == s2);
 
         Ok(())
     }
 
     #[test]
-    fn reuse_session() {
+    fn change_session() -> super::super::Result<()> {
         let pt = b"abc";
 
-        let res = super::super::credentials::Credentials::new(None, None);
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-        let creds = res.unwrap();
+        let creds = super::super::credentials::Credentials::new(None, None)?;
+        let mut dec = super::Decryption::new(&creds)?;
 
-        let res = super::super::encryption::encrypt(&creds, &pt[..]);
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-        let ct = res.unwrap();
-
-        let mut dec = super::Decryption::new(&creds).unwrap();
-        let mut rec: Vec<u8>;
-        rec = dec.begin().unwrap();
-        rec.extend(dec.update(&ct).unwrap());
-        rec.extend(dec.end().unwrap());
+        let ct = super::super::encryption::encrypt(&creds, &pt[..])?;
+        let rec = dec.cipher(&ct)?;
         assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
+        let fp1 = dec.session.as_ref().unwrap().key.fingerprint.clone();
 
-        rec = dec.begin().unwrap();
-        rec.extend(dec.update(&ct).unwrap());
-        rec.extend(dec.end().unwrap());
+        let ct = super::super::encryption::encrypt(&creds, &pt[..])?;
+        let rec = dec.cipher(&ct)?;
         assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
-    }
+        let fp2 = dec.session.as_ref().unwrap().key.fingerprint.clone();
 
-    #[test]
-    fn change_session() {
-        let pt = b"abc";
+        /* different key fingerprints means different sessions */
+        assert!(fp1 != fp2);
 
-        let res = super::super::credentials::Credentials::new(None, None);
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-        let creds = res.unwrap();
-
-        let res = super::super::encryption::encrypt(&creds, &pt[..]);
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-        let ct = res.unwrap();
-
-        let mut dec = super::Decryption::new(&creds).unwrap();
-        let mut rec: Vec<u8>;
-        rec = dec.begin().unwrap();
-        rec.extend(dec.update(&ct).unwrap());
-        rec.extend(dec.end().unwrap());
-        assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
-
-        let res = super::super::encryption::encrypt(&creds, &pt[..]);
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-        let ct = res.unwrap();
-        rec = dec.begin().unwrap();
-        rec.extend(dec.update(&ct).unwrap());
-        rec.extend(dec.end().unwrap());
-        assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
+        Ok(())
     }
 }
