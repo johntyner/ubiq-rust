@@ -75,8 +75,6 @@ impl Credentials {
         let mut c = Self::construct();
         let mut ini = configparser::ini::Ini::new_cs();
 
-        // todo separate loading from file and parsing so that
-        // parsing can be unit tested more easily
         match ini.read(input) {
             Err(s) => return Err(Error::from_string(s)),
             Ok(profs) => match profs.get(prof) {
