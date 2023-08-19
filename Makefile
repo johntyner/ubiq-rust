@@ -1,6 +1,11 @@
 QUIET	:= @
 
-build b test t:
+PROFILE	:= dev
+
+build b:
+	$(QUIET)cargo $(@) --profile $(PROFILE)
+
+test t:
 	$(QUIET)cargo $(@)
 
 fmt:
