@@ -1,5 +1,5 @@
-use super::Error;
-use super::Result;
+use crate::error::Error;
+use crate::result::Result;
 
 pub mod base64;
 pub mod cipher;

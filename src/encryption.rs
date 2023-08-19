@@ -1,11 +1,11 @@
-use super::algorithm;
-use super::algorithm::Algorithm;
-use super::client::Client;
-use super::credentials::Credentials;
-use super::header::Header;
-use super::support;
-use super::Error;
-use super::Result;
+use crate::algorithm;
+use crate::algorithm::Algorithm;
+use crate::client::Client;
+use crate::credentials::Credentials;
+use crate::error::Error;
+use crate::header::Header;
+use crate::result::Result;
+use crate::support;
 
 const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
 
@@ -176,7 +176,7 @@ impl Encryption<'_> {
 
         let hdr = Header::new(
             if self.session.algo.len.tag > 0 {
-                super::header::V0_FLAG_AAD
+                crate::header::V0_FLAG_AAD
             } else {
                 0
             },
@@ -190,7 +190,7 @@ impl Encryption<'_> {
             self.session.algo,
             &self.session.key.raw,
             &iv,
-            if (hdr.flags & super::header::V0_FLAG_AAD) != 0 {
+            if (hdr.flags & crate::header::V0_FLAG_AAD) != 0 {
                 Some(&ct)
             } else {
                 None

@@ -1,8 +1,8 @@
-use super::Error;
-use super::Result;
+use crate::error::Error;
+use crate::result::Result;
 
 pub struct CipherCtx<'a> {
-    pub(super) algo: &'a super::super::algorithm::Algorithm<'a>,
+    pub(super) algo: &'a crate::algorithm::Algorithm<'a>,
     pub(super) cipher: &'a openssl::cipher::CipherRef,
     pub(super) ctx: openssl::cipher_ctx::CipherCtx,
 }
@@ -15,7 +15,7 @@ impl std::fmt::Debug for CipherCtx<'_> {
 
 impl CipherCtx<'_> {
     pub fn new<'a>(
-        algo: &'a super::super::algorithm::Algorithm<'a>,
+        algo: &'a crate::algorithm::Algorithm<'a>,
     ) -> Result<CipherCtx<'a>> {
         let c: &openssl::cipher::CipherRef;
         match algo.name {

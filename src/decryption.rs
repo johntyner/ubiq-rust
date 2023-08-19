@@ -1,10 +1,10 @@
-use super::algorithm::Algorithm;
-use super::client::Client;
-use super::credentials::Credentials;
-use super::header::Header;
-use super::support;
-use crate::Error;
-use crate::Result;
+use crate::algorithm::Algorithm;
+use crate::client::Client;
+use crate::credentials::Credentials;
+use crate::error::Error;
+use crate::header::Header;
+use crate::result::Result;
+use crate::support;
 
 const DECRYPTION_KEY_PATH: &str = "api/v0/decryption/key";
 
@@ -78,7 +78,7 @@ impl DecryptionSession<'_> {
                     uses: 0,
                 },
 
-                algo: super::algorithm::get_by_id(algo)?,
+                algo: crate::algorithm::get_by_id(algo)?,
                 ctx: None,
             }),
         }
@@ -186,7 +186,7 @@ impl Decryption<'_> {
                     s.algo,
                     &s.key.raw,
                     hdr.iv,
-                    if (hdr.flags & super::header::V0_FLAG_AAD) != 0 {
+                    if (hdr.flags & crate::header::V0_FLAG_AAD) != 0 {
                         Some(&buf[0..hlen])
                     } else {
                         None
@@ -275,24 +275,24 @@ pub fn decrypt(c: &Credentials, ct: &[u8]) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn reuse_session() -> super::super::Result<()> {
+    fn reuse_session() -> crate::result::Result<()> {
         let pt = b"abc";
 
-        let creds = super::super::credentials::Credentials::new(None, None)?;
-        let ct = super::super::encryption::encrypt(&creds, &pt[..])?;
-        let mut dec = super::Decryption::new(&creds)?;
+        let creds = crate::credentials::Credentials::new(None, None)?;
+        let ct = crate::encryption::encrypt(&creds, &pt[..])?;
+        let mut dec = crate::decryption::Decryption::new(&creds)?;
 
         let rec = dec.cipher(&ct)?;
         assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
         let fp1 = dec.session.as_ref().unwrap().key.fingerprint.clone();
         let s1 = dec.session.as_ref().unwrap()
-            as *const super::DecryptionSession<'_>;
+            as *const crate::decryption::DecryptionSession<'_>;
 
         let rec = dec.cipher(&ct)?;
         assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
         let fp2 = dec.session.as_ref().unwrap().key.fingerprint.clone();
         let s2 = dec.session.as_ref().unwrap()
-            as *const super::DecryptionSession<'_>;
+            as *const crate::decryption::DecryptionSession<'_>;
 
         /*
          * we really want to compare the session.id, but
@@ -305,18 +305,18 @@ mod tests {
     }
 
     #[test]
-    fn change_session() -> super::super::Result<()> {
+    fn change_session() -> crate::result::Result<()> {
         let pt = b"abc";
 
-        let creds = super::super::credentials::Credentials::new(None, None)?;
-        let mut dec = super::Decryption::new(&creds)?;
+        let creds = crate::credentials::Credentials::new(None, None)?;
+        let mut dec = crate::decryption::Decryption::new(&creds)?;
 
-        let ct = super::super::encryption::encrypt(&creds, &pt[..])?;
+        let ct = crate::encryption::encrypt(&creds, &pt[..])?;
         let rec = dec.cipher(&ct)?;
         assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
         let fp1 = dec.session.as_ref().unwrap().key.fingerprint.clone();
 
-        let ct = super::super::encryption::encrypt(&creds, &pt[..])?;
+        let ct = crate::encryption::encrypt(&creds, &pt[..])?;
         let rec = dec.cipher(&ct)?;
         assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
         let fp2 = dec.session.as_ref().unwrap().key.fingerprint.clone();

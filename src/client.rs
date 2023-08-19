@@ -1,6 +1,7 @@
-use super::credentials::Credentials;
-use super::Error;
-use super::Result;
+use crate::credentials::Credentials;
+use crate::error::Error;
+use crate::result::Result;
+use crate::support;
 
 type Response = reqwest::blocking::Response;
 
@@ -13,7 +14,7 @@ pub(super) struct Client {
 }
 
 pub fn sign_header(
-    digest: &mut crate::support::hmac::HmacCtx,
+    digest: &mut support::hmac::HmacCtx,
     headers: &mut Vec<String>,
     header: &str,
     value: &str,
@@ -112,7 +113,7 @@ impl Client {
             Some(q) => reqtgt = format!("{}?{}", reqtgt, q),
         }
 
-        let mut digest = super::support::digest::DigestCtx::new("sha512")?;
+        let mut digest = support::digest::DigestCtx::new("sha512")?;
         match req.body() {
             None => (),
             Some(body) => match body.as_bytes() {
@@ -149,7 +150,7 @@ impl Client {
             hdrs.insert(
                 "Digest",
                 reqwest::header::HeaderValue::from_str(
-                    format!("SHA-512={}", super::support::base64::encode(&sum))
+                    format!("SHA-512={}", support::base64::encode(&sum))
                         .as_str(),
                 )
                 .unwrap(),
@@ -158,7 +159,7 @@ impl Client {
 
         let mut headers = Vec::<String>::new();
         let mut hmac =
-            crate::support::hmac::HmacCtx::new("sha512", self.sapi.as_bytes())?;
+            support::hmac::HmacCtx::new("sha512", self.sapi.as_bytes())?;
         sign_header(&mut hmac, &mut headers, "(created)", &created)?;
         sign_header(&mut hmac, &mut headers, "(request-target)", &reqtgt)?;
         for h in ["Content-Length", "Content-Type", "Date", "Digest", "Host"] {
@@ -191,7 +192,7 @@ impl Client {
                         self.papi,
                         created,
                         headers.join(" "),
-                        super::support::base64::encode(&sum),
+                        support::base64::encode(&sum),
                     )
                     .as_str(),
                 )
@@ -209,9 +210,9 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::Client;
-    use super::Credentials;
     use super::Response;
-    use super::Result;
+    use crate::result::Result;
+    use crate::credentials::Credentials;
 
     #[derive(serde::Deserialize)]
     struct HttpbinResponse {

@@ -1,3 +1,6 @@
+use crate::error::Error;
+use crate::result::Result;
+
 pub const V0_FLAG_AAD: usize = 1 << 0;
 
 pub struct Header<'a> {
@@ -40,9 +43,9 @@ impl Header<'_> {
         v
     }
 
-    pub fn can_deserialize(v: &[u8]) -> super::Result<usize> {
+    pub fn can_deserialize(v: &[u8]) -> Result<usize> {
         if v.len() > 0 && v[0] != 0 {
-            return Err(super::Error::from_str("invalid header version"));
+            return Err(Error::from_str("invalid header version"));
         }
 
         if v.len() < 6 {
@@ -60,7 +63,7 @@ impl Header<'_> {
         Ok(hsize)
     }
 
-    pub fn deserialize<'a>(v: &'a [u8]) -> super::Result<Header<'a>> {
+    pub fn deserialize<'a>(v: &'a [u8]) -> Result<Header<'a>> {
         let ivlen = v[3] as usize;
         let keylen = (((v[4] as u16) << 8) | (v[5] as u16)) as usize;
 

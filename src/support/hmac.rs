@@ -1,5 +1,5 @@
-use crate::Error;
-use crate::Result;
+use crate::error::Error;
+use crate::result::Result;
 
 pub struct HmacCtx {
     ctx: openssl::md_ctx::MdCtx,

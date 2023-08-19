@@ -1,5 +1,5 @@
-use super::Error;
-use super::Result;
+use crate::error::Error;
+use crate::result::Result;
 
 #[derive(Debug)]
 pub struct AlgorithmLengths {

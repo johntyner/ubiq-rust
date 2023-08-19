@@ -1,7 +1,7 @@
 mod tests {
     mod decryption {
         #[test]
-        fn simple_decrypt() -> ubiq::Result<()> {
+        fn simple_decrypt() -> ubiq::result::Result<()> {
             let creds = ubiq::credentials::Credentials::new(None, None)?;
 
             let pt = b"abc";

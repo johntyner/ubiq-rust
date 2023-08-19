@@ -1,5 +1,5 @@
-use super::Error;
-use super::Result;
+use crate::error::Error;
+use crate::result::Result;
 
 const PAPI_ID: &str = "ACCESS_KEY_ID";
 const SAPI_ID: &str = "SECRET_SIGNING_KEY";
