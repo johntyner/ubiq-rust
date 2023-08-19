@@ -3,6 +3,7 @@
 pub(crate) mod algorithm;
 pub(crate) mod client;
 pub mod credentials;
+pub mod decryption;
 pub mod encryption;
 pub(crate) mod header;
 pub(crate) mod support;

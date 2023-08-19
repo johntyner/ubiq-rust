@@ -3,6 +3,7 @@ use super::Result;
 
 pub mod base64;
 pub mod cipher;
+pub mod decryption;
 pub mod digest;
 pub mod encryption;
 pub mod hmac;
@@ -35,9 +36,8 @@ fn openssl_unwrap_data_key(
     Ok(raw)
 }
 
-pub fn unwrap_data_key(wdk: &str, epk: &str, srsa: &str) -> Result<Vec<u8>> {
-    let w = super::support::base64::decode(wdk)?;
-    match openssl_unwrap_data_key(&w[..], epk, srsa) {
+pub fn unwrap_data_key(wdk: &[u8], epk: &str, srsa: &str) -> Result<Vec<u8>> {
+    match openssl_unwrap_data_key(wdk, epk, srsa) {
         Err(e) => Err(Error::from_string(e.to_string())),
         Ok(k) => Ok(k),
     }

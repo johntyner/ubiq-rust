@@ -82,12 +82,12 @@ impl Encryption<'_> {
             session: msg.encryption_session,
 
             key: EncryptionKey {
-                enc: support::base64::decode(&msg.encrypted_data_key)?,
                 raw: support::unwrap_data_key(
-                    &msg.wrapped_data_key,
+                    &support::base64::decode(&msg.wrapped_data_key)?,
                     &msg.encrypted_private_key,
                     creds.srsa(),
                 )?,
+                enc: support::base64::decode(&msg.encrypted_data_key)?,
 
                 fingerprint: msg.key_fingerprint,
 
@@ -113,11 +113,20 @@ impl Encryption<'_> {
         iv.resize(self.algo.len.iv, 0);
         support::getrandom(&mut iv[..])?;
 
-        let hdr = Header::new(0, self.algo.id, &iv, &self.key.enc);
+        let hdr = Header::new(
+            if self.algo.len.tag > 0 {
+                super::header::V0_FLAG_AAD
+            } else {
+                0
+            },
+            self.algo.id,
+            &iv,
+            &self.key.enc,
+        );
         let vhdr = hdr.serialize();
 
         self.ctx = Some(support::encryption::init(
-            &self.algo,
+            self.algo,
             &self.key.raw,
             &iv,
             Some(&vhdr),

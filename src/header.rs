@@ -1,11 +1,11 @@
 pub const V0_FLAG_AAD: usize = 1 << 0;
 
 pub struct Header<'a> {
-    version: usize,
-    flags: usize,
-    algorithm: usize,
-    iv: &'a [u8],
-    key: &'a [u8],
+    pub(crate) version: usize,
+    pub(crate) flags: usize,
+    pub(crate) algorithm: usize,
+    pub(crate) iv: &'a [u8],
+    pub(crate) key: &'a [u8],
 }
 
 impl Header<'_> {
@@ -50,7 +50,7 @@ impl Header<'_> {
         }
 
         let ivlen: u8 = v[3];
-        let keylen: u16 = ((v[4] << 8) as u16) | (v[5] as u16);
+        let keylen = (((v[4] as u16) << 8) | (v[5] as u16)) as usize;
         let hsize: usize = 6 + ivlen as usize + keylen as usize;
 
         if v.len() < hsize {
@@ -62,7 +62,7 @@ impl Header<'_> {
 
     pub fn deserialize<'a>(v: &'a [u8]) -> super::Result<Header<'a>> {
         let ivlen = v[3] as usize;
-        let keylen = (((v[4] << 8) as u16) | (v[5] as u16)) as usize;
+        let keylen = (((v[4] as u16) << 8) | (v[5] as u16)) as usize;
 
         Ok(Header {
             version: v[0] as usize,
