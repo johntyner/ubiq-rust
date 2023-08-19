@@ -257,11 +257,11 @@ mod tests {
 
     #[test]
     fn post() -> Result<()> {
-        upload(Client::post, &"/post")
+        upload(Client::post, "/post")
     }
 
     #[test]
     fn patch() -> Result<()> {
-        upload(Client::patch, &"/patch")
+        upload(Client::patch, "/patch")
     }
 }
