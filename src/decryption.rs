@@ -25,6 +25,9 @@ struct DecryptionSessionKey {
 }
 
 struct DecryptionSession<'a> {
+    client: std::rc::Rc<Client>,
+    host: std::rc::Rc<String>,
+
     id: Option<String>,
 
     key: DecryptionSessionKey,
@@ -33,9 +36,87 @@ struct DecryptionSession<'a> {
     ctx: Option<support::cipher::CipherCtx<'a>>,
 }
 
+impl DecryptionSession<'_> {
+    fn new<'a>(
+        client: std::rc::Rc<Client>,
+        host: std::rc::Rc<String>,
+        algo: usize,
+        edk: &[u8],
+        srsa: &str,
+    ) -> Result<DecryptionSession<'a>> {
+        let rsp = client.post(
+            &format!("{}/{}", host, DECRYPTION_KEY_PATH),
+            "application/json".to_string(),
+            format!(
+                "{{\
+                   \"encrypted_data_key\": \"{}\"\
+                 }}",
+                support::base64::encode(edk)
+            ),
+        )?;
+
+        match rsp.json::<NewDecryptionResponse>() {
+            Err(e) => Err(Error::from_string(e.to_string())),
+            Ok(msg) => Ok(DecryptionSession {
+                client: client,
+                host: host,
+
+                id: msg.encryption_session,
+
+                key: DecryptionSessionKey {
+                    raw: support::unwrap_data_key(
+                        &support::base64::decode(&msg.wrapped_data_key)?,
+                        &msg.encrypted_private_key,
+                        srsa,
+                    )?,
+                    enc: edk.to_vec(),
+
+                    fingerprint: msg.key_fingerprint,
+
+                    uses: 0,
+                },
+
+                algo: super::algorithm::get_by_id(algo)?,
+                ctx: None,
+            }),
+        }
+    }
+
+    fn close(&mut self) -> Result<()> {
+        if self.key.uses > 0 {
+            let mut path = format!(
+                "{}/{}/{}",
+                self.host, DECRYPTION_KEY_PATH, self.key.fingerprint
+            );
+            if self.id.is_some() {
+                path = format!("{}/{}", path, self.id.as_ref().unwrap());
+            }
+
+            self.client.patch(
+                &path,
+                "application/json".to_string(),
+                format!(
+                    "{{\
+                       \"uses\": {}\
+                     }}",
+                    self.key.uses
+                ),
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Drop for DecryptionSession<'_> {
+    fn drop(&mut self) {
+        let _ = self.close();
+    }
+}
+
 pub struct Decryption<'a> {
-    client: Client,
-    host: String,
+    client: std::rc::Rc<Client>,
+    host: std::rc::Rc<String>,
 
     srsa: String,
     session: Option<DecryptionSession<'a>>,
@@ -48,8 +129,8 @@ const DECRYPTION_KEY_PATH: &str = "api/v0/decryption/key";
 impl Decryption<'_> {
     pub fn new<'a>(creds: &Credentials) -> Result<Decryption<'a>> {
         Ok(Decryption {
-            client: Client::new(creds),
-            host: creds.host().clone(),
+            client: std::rc::Rc::new(Client::new(creds)),
+            host: std::rc::Rc::new(creds.host().clone()),
 
             srsa: creds.srsa().clone(),
             session: None,
@@ -59,7 +140,9 @@ impl Decryption<'_> {
     }
 
     pub fn begin(&mut self) -> Result<Vec<u8>> {
-        if self.session.is_some() {
+        if self.session.is_some()
+            && self.session.as_ref().unwrap().ctx.is_some()
+        {
             return Err(Error::from_str("decryption already in progress"));
         }
 
@@ -67,17 +150,15 @@ impl Decryption<'_> {
     }
 
     pub fn update(&mut self, ct: &[u8]) -> Result<Vec<u8>> {
-        let mut pt = Vec::<u8>::new();
-        let mut buf = std::mem::take(&mut self.buf);
-
-        buf.extend(ct);
+        self.buf.extend(ct);
 
         if self.session.is_none()
             || self.session.as_ref().unwrap().ctx.is_none()
         {
-            let hlen = Header::can_deserialize(&buf)?;
+            let hlen = Header::can_deserialize(&self.buf)?;
 
             if hlen > 0 {
+                let mut buf = std::mem::take(&mut self.buf);
                 let hdr = Header::deserialize(&buf)?;
 
                 if hdr.version != 0 {
@@ -87,11 +168,17 @@ impl Decryption<'_> {
                 if self.session.is_some()
                     && self.session.as_ref().unwrap().key.enc != hdr.key
                 {
-                    let _ = self.reset();
+                    self.session = None;
                 }
 
                 if self.session.is_none() {
-                    self.init(hdr.algorithm, hdr.key)?;
+                    self.session = Some(DecryptionSession::new(
+                        std::rc::Rc::clone(&self.client),
+                        std::rc::Rc::clone(&self.host),
+                        hdr.algorithm,
+                        hdr.key,
+                        &self.srsa,
+                    )?);
                 }
 
                 let mut s = self.session.as_mut().unwrap();
@@ -109,28 +196,28 @@ impl Decryption<'_> {
                 s.key.uses += 1;
 
                 buf.drain(0..hlen);
+                self.buf = buf;
             }
         }
+
+        let mut pt = Vec::<u8>::new();
 
         if self.session.is_some()
             && self.session.as_ref().unwrap().ctx.is_some()
         {
             let s = self.session.as_mut().unwrap();
 
-            let sz: isize = buf.len() as isize - s.algo.len.tag as isize;
-            if sz > 0 {
-                let mut c = s.ctx.as_mut().unwrap();
+            if self.buf.len() > s.algo.len.tag {
+                let sz = self.buf.len() - s.algo.len.tag;
 
                 pt = support::decryption::update(
-                    &mut c,
-                    &buf[0..(sz as usize)],
+                    &mut s.ctx.as_mut().unwrap(),
+                    &self.buf[0..sz],
                 )?;
 
-                buf.drain(0..(sz as usize));
+                self.buf.drain(0..sz);
             }
         }
-
-        self.buf = buf;
 
         Ok(pt)
     }
@@ -152,88 +239,19 @@ impl Decryption<'_> {
                 },
             )?;
 
-            s.ctx = None;
             self.buf.truncate(0);
+            s.ctx = None;
         }
 
         Ok(pt)
     }
 
     pub fn close(&mut self) -> Result<()> {
-        self.reset()
-    }
-
-    fn init(&mut self, algo: usize, edk: &[u8]) -> Result<()> {
-        let rsp = self.client.post(
-            &format!("{}/{}", self.host, DECRYPTION_KEY_PATH),
-            "application/json".to_string(),
-            format!(
-                "{{\
-                   \"encrypted_data_key\": \"{}\"\
-                 }}",
-                support::base64::encode(edk)
-            ),
-        )?;
-
-        match rsp.json::<NewDecryptionResponse>() {
-            Err(e) => return Err(Error::from_string(e.to_string())),
-            Ok(msg) => {
-                self.session = Some(DecryptionSession {
-                    id: msg.encryption_session,
-
-                    key: DecryptionSessionKey {
-                        raw: support::unwrap_data_key(
-                            &support::base64::decode(&msg.wrapped_data_key)?,
-                            &msg.encrypted_private_key,
-                            &self.srsa,
-                        )?,
-                        enc: edk.to_vec(),
-
-                        fingerprint: msg.key_fingerprint,
-
-                        uses: 0,
-                    },
-
-                    algo: super::algorithm::get_by_id(algo)?,
-                    ctx: None,
-                });
-            }
-        }
-
-        Ok(())
-    }
-
-    fn reset(&mut self) -> Result<()> {
         let session = std::mem::replace(&mut self.session, None);
-
-        self.buf.truncate(0);
-
-        if session.is_some() {
-            let s = session.unwrap();
-
-            if s.key.uses > 0 {
-                let mut path = format!(
-                    "{}/{}/{}",
-                    self.host, DECRYPTION_KEY_PATH, s.key.fingerprint
-                );
-                if s.id.is_some() {
-                    path = format!("{}/{}", path, s.id.as_ref().unwrap());
-                }
-
-                self.client.patch(
-                    &path,
-                    "application/json".to_string(),
-                    format!(
-                        "{{\
-                           \"uses\": {}\
-                         }}",
-                        s.key.uses
-                    ),
-                )?;
-            }
+        match session {
+            Some(mut s) => s.close(),
+            None => Ok(()),
         }
-
-        Ok(())
     }
 }
 
@@ -257,7 +275,20 @@ pub fn decrypt(c: &Credentials, ct: &[u8]) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn simple_decrypt() {
+    fn simple_decrypt() -> super::super::Result<()> {
+        let creds = super::super::credentials::Credentials::new(None, None)?;
+
+        let pt = b"abc";
+        let ct = super::super::encryption::encrypt(&creds, &pt[..])?;
+        let rec = super::super::decryption::decrypt(&creds, &ct)?;
+
+        assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
+
+        Ok(())
+    }
+
+    #[test]
+    fn reuse_session() {
         let pt = b"abc";
 
         let res = super::super::credentials::Credentials::new(None, None);
@@ -268,10 +299,44 @@ mod tests {
         assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
         let ct = res.unwrap();
 
-        let res = super::super::decryption::decrypt(&creds, &ct);
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-        let rec = res.unwrap();
+        let mut dec = super::Decryption::new(&creds).unwrap();
+        let mut rec: Vec<u8>;
+        rec = dec.begin().unwrap();
+        rec.extend(dec.update(&ct).unwrap());
+        rec.extend(dec.end().unwrap());
+        assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
 
+        rec = dec.begin().unwrap();
+        rec.extend(dec.update(&ct).unwrap());
+        rec.extend(dec.end().unwrap());
+        assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
+    }
+
+    #[test]
+    fn change_session() {
+        let pt = b"abc";
+
+        let res = super::super::credentials::Credentials::new(None, None);
+        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
+        let creds = res.unwrap();
+
+        let res = super::super::encryption::encrypt(&creds, &pt[..]);
+        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
+        let ct = res.unwrap();
+
+        let mut dec = super::Decryption::new(&creds).unwrap();
+        let mut rec: Vec<u8>;
+        rec = dec.begin().unwrap();
+        rec.extend(dec.update(&ct).unwrap());
+        rec.extend(dec.end().unwrap());
+        assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
+
+        let res = super::super::encryption::encrypt(&creds, &pt[..]);
+        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
+        let ct = res.unwrap();
+        rec = dec.begin().unwrap();
+        rec.extend(dec.update(&ct).unwrap());
+        rec.extend(dec.end().unwrap());
         assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
     }
 }

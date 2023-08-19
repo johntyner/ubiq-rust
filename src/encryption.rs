@@ -123,18 +123,22 @@ impl Encryption<'_> {
             &iv,
             &self.key.enc,
         );
-        let vhdr = hdr.serialize();
+        let ct = hdr.serialize();
 
         self.ctx = Some(support::encryption::init(
             self.algo,
             &self.key.raw,
             &iv,
-            Some(&vhdr),
+            if (hdr.flags & super::header::V0_FLAG_AAD) != 0 {
+                Some(&ct)
+            } else {
+                None
+            },
         )?);
 
         self.key.uses.cur += 1;
 
-        Ok(vhdr)
+        Ok(ct)
     }
 
     pub fn update(&mut self, pt: &[u8]) -> Result<Vec<u8>> {
