@@ -1,3 +1,5 @@
+//! Interfaces for encrypting data
+
 use crate::algorithm;
 use crate::algorithm::Algorithm;
 use crate::client::Client;

@@ -1,3 +1,5 @@
+//! Interfaces for decrypting data
+
 use crate::algorithm::Algorithm;
 use crate::client::Client;
 use crate::credentials::Credentials;
