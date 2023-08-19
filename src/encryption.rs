@@ -25,17 +25,29 @@ struct NewEncryptionResponse {
 }
 
 #[derive(Debug)]
-struct EncryptionKeyUses {
+struct EncryptionSessionKeyUses {
     max: usize,
     cur: usize,
 }
 
 #[derive(Debug)]
-struct EncryptionKey {
+struct EncryptionSessionKey {
     raw: Vec<u8>,
     enc: Vec<u8>,
+
     fingerprint: String,
-    uses: EncryptionKeyUses,
+
+    uses: EncryptionSessionKeyUses,
+}
+
+#[derive(Debug)]
+struct EncryptionSession<'a> {
+    id: String,
+
+    key: EncryptionSessionKey,
+
+    algo: &'a Algorithm<'a>,
+    ctx: Option<support::cipher::CipherCtx<'a>>,
 }
 
 #[derive(Debug)]
@@ -43,12 +55,7 @@ pub struct Encryption<'a> {
     client: Client,
     host: String,
 
-    session: String,
-
-    key: EncryptionKey,
-
-    algo: &'a Algorithm<'a>,
-    ctx: Option<support::cipher::CipherCtx<'a>>,
+    session: EncryptionSession<'a>,
 }
 
 const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
@@ -79,55 +86,57 @@ impl Encryption<'_> {
             client: client,
             host: host,
 
-            session: msg.encryption_session,
+            session: EncryptionSession {
+                id: msg.encryption_session,
 
-            key: EncryptionKey {
-                raw: support::unwrap_data_key(
-                    &support::base64::decode(&msg.wrapped_data_key)?,
-                    &msg.encrypted_private_key,
-                    creds.srsa(),
-                )?,
-                enc: support::base64::decode(&msg.encrypted_data_key)?,
+                key: EncryptionSessionKey {
+                    raw: support::unwrap_data_key(
+                        &support::base64::decode(&msg.wrapped_data_key)?,
+                        &msg.encrypted_private_key,
+                        creds.srsa(),
+                    )?,
+                    enc: support::base64::decode(&msg.encrypted_data_key)?,
 
-                fingerprint: msg.key_fingerprint,
+                    fingerprint: msg.key_fingerprint,
 
-                uses: EncryptionKeyUses {
-                    max: msg.max_uses,
-                    cur: 0,
+                    uses: EncryptionSessionKeyUses {
+                        max: msg.max_uses,
+                        cur: 0,
+                    },
                 },
-            },
 
-            algo: algorithm::get_by_name(&msg.security_model.algorithm)?,
-            ctx: None,
+                algo: algorithm::get_by_name(&msg.security_model.algorithm)?,
+                ctx: None,
+            },
         })
     }
 
     pub fn begin(&mut self) -> Result<Vec<u8>> {
-        if self.ctx.is_some() {
+        if self.session.ctx.is_some() {
             return Err(Error::from_str("encryption already in progress"));
-        } else if self.key.uses.cur >= self.key.uses.max {
+        } else if self.session.key.uses.cur >= self.session.key.uses.max {
             return Err(Error::from_str("encryption key has expired"));
         }
 
         let mut iv = Vec::<u8>::new();
-        iv.resize(self.algo.len.iv, 0);
+        iv.resize(self.session.algo.len.iv, 0);
         support::getrandom(&mut iv[..])?;
 
         let hdr = Header::new(
-            if self.algo.len.tag > 0 {
+            if self.session.algo.len.tag > 0 {
                 super::header::V0_FLAG_AAD
             } else {
                 0
             },
-            self.algo.id,
+            self.session.algo.id,
             &iv,
-            &self.key.enc,
+            &self.session.key.enc,
         );
         let ct = hdr.serialize();
 
-        self.ctx = Some(support::encryption::init(
-            self.algo,
-            &self.key.raw,
+        self.session.ctx = Some(support::encryption::init(
+            self.session.algo,
+            &self.session.key.raw,
             &iv,
             if (hdr.flags & super::header::V0_FLAG_AAD) != 0 {
                 Some(&ct)
@@ -136,36 +145,37 @@ impl Encryption<'_> {
             },
         )?);
 
-        self.key.uses.cur += 1;
+        self.session.key.uses.cur += 1;
 
         Ok(ct)
     }
 
     pub fn update(&mut self, pt: &[u8]) -> Result<Vec<u8>> {
-        if self.ctx.is_none() {
+        if self.session.ctx.is_none() {
             return Err(Error::from_str("encryption not yet started"));
         }
 
-        support::encryption::update(self.ctx.as_mut().unwrap(), pt)
+        support::encryption::update(self.session.ctx.as_mut().unwrap(), pt)
     }
 
     pub fn end(&mut self) -> Result<Vec<u8>> {
-        if self.ctx.is_none() {
+        if self.session.ctx.is_none() {
             return Err(Error::from_str("encryption not yet started"));
         }
 
-        let res = support::encryption::finalize(self.ctx.as_mut().unwrap());
-        self.ctx = None;
+        let res =
+            support::encryption::finalize(self.session.ctx.as_mut().unwrap());
+        self.session.ctx = None;
 
         return res;
     }
 
     pub fn close(&mut self) -> Result<()> {
-        let cur = self.key.uses.cur;
-        let max = self.key.uses.max;
+        let cur = self.session.key.uses.cur;
+        let max = self.session.key.uses.max;
 
-        self.key.uses.cur = 0;
-        self.key.uses.max = 0;
+        self.session.key.uses.cur = 0;
+        self.session.key.uses.max = 0;
 
         if cur < max {
             let rsp = self.client.patch(
@@ -173,8 +183,8 @@ impl Encryption<'_> {
                     "{}/{}/{}/{}",
                     self.host,
                     ENCRYPTION_KEY_PATH,
-                    self.key.fingerprint,
-                    self.session
+                    self.session.key.fingerprint,
+                    self.session.id
                 ),
                 "application/json".to_string(),
                 format!(
@@ -216,5 +226,4 @@ pub fn encrypt(c: &Credentials, pt: &[u8]) -> Result<Vec<u8>> {
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}
