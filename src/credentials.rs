@@ -1,3 +1,53 @@
+//! Credentials for authenticating to the Ubiq platform
+//!
+//! Credentials consist of several unique strings of data and
+//! can be found in the .ubiq/credentials file in the user's home
+//! directory, in the environment or a combination of both. This
+//! module handles retrieval of the credentials from those locations
+//! or the creation of credentials from manually-specified strings.
+//!
+//! # The credentials file
+//! The credentials file takes the form:
+//! ```pre
+//! [profile]
+//! ACCESS_KEY_ID = ...
+//! SECRET_SIGNING_KEY = ...
+//! SECRET_CRYPTO_ACCESS_KEY = ...
+//! HOST = ...
+//! ```
+//! The first three items are required. The last (`HOST`) is not
+//! required, and a suitable default will be supplied if it is not
+//! present. The host name may or may not contain a leading `http://`
+//! or `https://`. By default, this file is located at `.ubiq/credentials`
+//! in the user's home directory.
+//!
+//! `profile` may be specified as `default`, and this profile will
+//! be loaded if one is not specified.
+//!
+//! # Credentials in the environment
+//! The credentials may also be specified in the environment using the names
+//! above, prefixed with `UBIQ_`, e.g. `ACCESS_KEY_ID` becomes
+//! `UBIQ_ACCESS_KEY_ID` in the environment. Rules governing the precedence
+//! of these variables is described at [`Credentials::new()`].
+//!
+//! # Examples
+//! ## Default credentials
+//! ```rust
+//! use ubiq::credentials::Credentials;
+//!
+//! let creds = Credentials::new(None, None).unwrap();
+//! ```
+//! ## Manually-specified credentials
+//! ```rust
+//! use ubiq::credentials::Credentials;
+//!
+//! let creds = Credentials::create(
+//!     "ACCESS_KEY_ID".to_string(),
+//!     "SECRET_SIGNING_KEY".to_string(),
+//!     "SECRET_CRYPTO_ACCESS_KEY".to_string(),
+//!     None,
+//! );
+
 use crate::error::Error;
 use crate::result::Result;
 
@@ -13,6 +63,7 @@ const SERVER: &str = "api.ubiqsecurity.com";
 const MAX_CREDENTIALS_SIZE: usize = 1024;
 
 #[derive(Debug)]
+/// The aggregation of the individual credential components
 pub struct Credentials {
     params: std::collections::HashMap<String, String>,
 }
@@ -130,6 +181,23 @@ impl Credentials {
         }
     }
 
+    /// Create a Credentials object from a file, the environment,
+    /// or a combination of the two.
+    ///
+    /// - `opt_path` is a path to the credentials file and may be `None`,
+    /// in which case, the file at the "default" location will be used.
+    /// - `opt_prof` is the name of the profile to be loaded from the file
+    /// and may be `None`, in which case, the "default" profile will be used.
+    ///
+    /// If the path is not specified, the file at the default location will
+    /// be loaded, and variables in the environment (if present) will take
+    /// precedence. If the path is specified, the variables from the file
+    /// will take precedence, except for the `HOST` variable. The `UBIQ_HOST`
+    /// variable in the environment always takes precedence.
+    ///
+    /// If the host was not specified at all, a suitable default will be
+    /// provided. Upon successful return, all credential components will
+    /// be present.
     pub fn new(
         opt_path: Option<String>,
         opt_prof: Option<String>,
@@ -187,6 +255,17 @@ impl Credentials {
         ))
     }
 
+    /// Create credentials from manually-specified components
+    ///
+    /// - `papi` corresponds to the `ACCESS_KEY_ID`
+    /// - `sapi` corresponds to the `SECRET_SIGNING_KEY`
+    /// - `srsa` corresponds to the `SECRET_CRYPTO_ACCES_KEY`
+    /// - `opt_host` is the host name of the API server and may be `None`.
+    /// As before, the host may or may not contain the HTTP scheme.
+    ///
+    /// The function populates the components of the credentials as specified
+    /// except for the host which will have the scheme added if it is missing.
+    /// As such, the function always succeeds.
     pub fn create(
         papi: String,
         sapi: String,
