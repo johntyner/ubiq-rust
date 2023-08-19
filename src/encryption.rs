@@ -12,7 +12,7 @@ const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
 #[derive(serde::Deserialize)]
 struct NewEncryptionResponseSecurityModel {
     algorithm: String,
-    enable_data_fragmentation: bool,
+    // enable_data_fragmentation: bool,
 }
 
 #[derive(serde::Deserialize)]

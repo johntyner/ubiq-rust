@@ -6,7 +6,7 @@ use crate::support;
 type Response = reqwest::blocking::Response;
 
 #[derive(Debug)]
-pub(super) struct Client {
+pub struct Client {
     client: reqwest::blocking::Client,
 
     papi: String,
@@ -38,6 +38,7 @@ impl Client {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get(&self, url: &str) -> Result<Response> {
         match reqwest::Url::parse(url) {
             Err(e) => Err(Error::from_string(e.to_string())),

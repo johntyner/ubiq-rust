@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub(crate) mod algorithm;
 pub(crate) mod client;
 pub mod credentials;

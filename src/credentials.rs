@@ -226,19 +226,19 @@ impl Credentials {
         }
     }
 
-    pub(super) fn papi(&self) -> &String {
+    pub(crate) fn papi(&self) -> &String {
         return self.params.get(PAPI_ID).unwrap();
     }
 
-    pub(super) fn sapi(&self) -> &String {
+    pub(crate) fn sapi(&self) -> &String {
         return self.params.get(SAPI_ID).unwrap();
     }
 
-    pub(super) fn srsa(&self) -> &String {
+    pub(crate) fn srsa(&self) -> &String {
         return self.params.get(SRSA_ID).unwrap();
     }
 
-    pub(super) fn host(&self) -> &String {
+    pub(crate) fn host(&self) -> &String {
         return self.params.get(HOST_ID).unwrap();
     }
 }
