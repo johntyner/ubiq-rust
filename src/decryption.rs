@@ -6,6 +6,8 @@ use super::support;
 use crate::Error;
 use crate::Result;
 
+const DECRYPTION_KEY_PATH: &str = "api/v0/decryption/key";
+
 #[derive(serde::Deserialize)]
 struct NewDecryptionResponse {
     encrypted_private_key: String,
@@ -123,8 +125,6 @@ pub struct Decryption<'a> {
 
     buf: Vec<u8>,
 }
-
-const DECRYPTION_KEY_PATH: &str = "api/v0/decryption/key";
 
 impl Decryption<'_> {
     pub fn new<'a>(creds: &Credentials) -> Result<Decryption<'a>> {

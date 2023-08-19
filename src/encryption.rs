@@ -7,6 +7,8 @@ use super::support;
 use super::Error;
 use super::Result;
 
+const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
+
 #[derive(serde::Deserialize)]
 struct NewEncryptionResponseSecurityModel {
     algorithm: String,
@@ -42,6 +44,9 @@ struct EncryptionSessionKey {
 
 #[derive(Debug)]
 struct EncryptionSession<'a> {
+    client: Client,
+    host: String,
+
     id: String,
 
     key: EncryptionSessionKey,
@@ -50,19 +55,12 @@ struct EncryptionSession<'a> {
     ctx: Option<support::cipher::CipherCtx<'a>>,
 }
 
-#[derive(Debug)]
-pub struct Encryption<'a> {
-    client: Client,
-    host: String,
-
-    session: EncryptionSession<'a>,
-}
-
-const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
-
-impl Encryption<'_> {
-    pub fn new<'a>(creds: &Credentials, uses: u32) -> Result<Encryption<'a>> {
-        let client = Client::new(creds);
+impl EncryptionSession<'_> {
+    pub fn new<'a>(
+        creds: &Credentials,
+        uses: usize,
+    ) -> Result<EncryptionSession<'a>> {
+        let client = Client::new(&creds);
         let host = creds.host().clone();
 
         let rsp = client.post(
@@ -82,32 +80,86 @@ impl Encryption<'_> {
             Ok(ne) => msg = ne,
         }
 
-        Ok(Encryption {
+        Ok(EncryptionSession {
             client: client,
             host: host,
 
-            session: EncryptionSession {
-                id: msg.encryption_session,
+            id: msg.encryption_session,
 
-                key: EncryptionSessionKey {
-                    raw: support::unwrap_data_key(
-                        &support::base64::decode(&msg.wrapped_data_key)?,
-                        &msg.encrypted_private_key,
-                        creds.srsa(),
-                    )?,
-                    enc: support::base64::decode(&msg.encrypted_data_key)?,
+            key: EncryptionSessionKey {
+                raw: support::unwrap_data_key(
+                    &support::base64::decode(&msg.wrapped_data_key)?,
+                    &msg.encrypted_private_key,
+                    creds.srsa(),
+                )?,
+                enc: support::base64::decode(&msg.encrypted_data_key)?,
 
-                    fingerprint: msg.key_fingerprint,
+                fingerprint: msg.key_fingerprint,
 
-                    uses: EncryptionSessionKeyUses {
-                        max: msg.max_uses,
-                        cur: 0,
-                    },
+                uses: EncryptionSessionKeyUses {
+                    max: msg.max_uses,
+                    cur: 0,
                 },
-
-                algo: algorithm::get_by_name(&msg.security_model.algorithm)?,
-                ctx: None,
             },
+
+            algo: algorithm::get_by_name(&msg.security_model.algorithm)?,
+            ctx: None,
+        })
+    }
+
+    pub fn close(&mut self) -> Result<()> {
+        let cur = self.key.uses.cur;
+        let max = self.key.uses.max;
+
+        self.key.uses.cur = 0;
+        self.key.uses.max = 0;
+
+        if cur < max {
+            let rsp = self.client.patch(
+                &format!(
+                    "{}/{}/{}/{}",
+                    self.host,
+                    ENCRYPTION_KEY_PATH,
+                    self.key.fingerprint,
+                    self.id
+                ),
+                "application/json".to_string(),
+                format!(
+                    "{{\
+                       \"requested\": {},\
+                       \"actual\": {}\
+                     }}",
+                    max, cur,
+                ),
+            )?;
+
+            if !rsp.status().is_success() {
+                return Err(Error::from_string(format!(
+                    "failed to update encryption key: {}",
+                    rsp.status().as_str()
+                )));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Drop for EncryptionSession<'_> {
+    fn drop(&mut self) {
+        let _ = self.close();
+    }
+}
+
+#[derive(Debug)]
+pub struct Encryption<'a> {
+    session: EncryptionSession<'a>,
+}
+
+impl Encryption<'_> {
+    pub fn new<'a>(creds: &Credentials, uses: usize) -> Result<Encryption<'a>> {
+        Ok(Encryption {
+            session: EncryptionSession::new(creds, uses)?,
         })
     }
 
@@ -171,40 +223,7 @@ impl Encryption<'_> {
     }
 
     pub fn close(&mut self) -> Result<()> {
-        let cur = self.session.key.uses.cur;
-        let max = self.session.key.uses.max;
-
-        self.session.key.uses.cur = 0;
-        self.session.key.uses.max = 0;
-
-        if cur < max {
-            let rsp = self.client.patch(
-                &format!(
-                    "{}/{}/{}/{}",
-                    self.host,
-                    ENCRYPTION_KEY_PATH,
-                    self.session.key.fingerprint,
-                    self.session.id
-                ),
-                "application/json".to_string(),
-                format!(
-                    "{{\
-                       \"requested\": {},\
-                       \"actual\": {}\
-                     }}",
-                    max, cur,
-                ),
-            )?;
-
-            if !rsp.status().is_success() {
-                return Err(Error::from_string(format!(
-                    "failed to update encryption key: {}",
-                    rsp.status().as_str()
-                )));
-            }
-        }
-
-        Ok(())
+        self.session.close()
     }
 
     pub fn cipher(&mut self, pt: &[u8]) -> Result<Vec<u8>> {
