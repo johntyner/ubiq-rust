@@ -229,42 +229,39 @@ mod tests {
     }
 
     #[test]
-    fn get() {
-        let res = new_client().get(&"https://httpbin.org/get".to_string());
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-
-        let rsp = res.unwrap();
-        assert!(rsp.status() == reqwest::StatusCode::OK);
+    fn get() -> Result<()> {
+        let rsp = new_client().get(&"https://httpbin.org/get".to_string())?;
+        assert!(rsp.status().is_success());
+        Ok(())
     }
 
     fn upload(
         upload_fn: fn(&Client, &str, String, String) -> Result<Response>,
         path: &str,
-    ) {
+    ) -> Result<()> {
         let payload = "{ \"key\": \"value\" }".to_string();
 
-        let res = upload_fn(
+        let rsp = upload_fn(
             &new_client(),
             &format!("{}{}", "https://httpbin.org", path),
             "application/json".to_string(),
             payload.clone(),
-        );
-        assert!(res.is_ok(), "{}", res.unwrap_err().to_string());
-
-        let rsp = res.unwrap();
-        assert!(rsp.status() == reqwest::StatusCode::OK);
+        )?;
+        assert!(rsp.status().is_success());
 
         let body: HttpbinResponse = rsp.json().unwrap();
         assert!(body.data == payload);
+
+        Ok(())
     }
 
     #[test]
-    fn post() {
-        upload(Client::post, &"/post");
+    fn post() -> Result<()> {
+        upload(Client::post, &"/post")
     }
 
     #[test]
-    fn patch() {
-        upload(Client::patch, &"/patch");
+    fn patch() -> Result<()> {
+        upload(Client::patch, &"/patch")
     }
 }

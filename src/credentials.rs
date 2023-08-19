@@ -246,10 +246,11 @@ impl Credentials {
 #[cfg(test)]
 mod tests {
     use super::Credentials;
+    use crate::result::Result;
 
     #[test]
-    fn has_default_filepath() {
-        let r = Credentials::get_default_filepath();
-        assert!(r.is_ok(), "{}", r.unwrap_err().to_string())
+    fn has_default_filepath() -> Result<()> {
+        Credentials::get_default_filepath()?;
+        Ok(())
     }
 }
