@@ -1,7 +1,25 @@
 //! Client library for the Ubiq platform
 //!
-//! Provides simple interfaces for achieving data encryption
-//! using the Ubiq platform
+//! Provides client interfaces for encrypting and decrypting data
+//! using the [`Ubiq`] [`platform`].
+//!
+//! # Example
+//! ```rust
+//! use ubiq::credentials::Credentials;
+//! use ubiq::encryption::encrypt;
+//! use ubiq::decryption::decrypt;
+//!
+//! let creds = Credentials::new(None, None).unwrap();
+//!
+//! let ct = encrypt(&creds, b"abc").unwrap();
+//! let pt = decrypt(&creds, &ct).unwrap();
+//!
+//! assert!(pt != ct);
+//! assert!(pt == b"abc");
+//! ```
+//!
+//! [`Ubiq`]: https://www.ubiqsecurity.com/
+//! [`platform`]: https://dashboard.ubiqsecurity.com/login
 
 pub(crate) mod algorithm;
 pub(crate) mod client;
@@ -19,6 +37,7 @@ pub mod result {
 /// Errors returned by the Ubiq library
 pub mod error {
     #[derive(Debug)]
+    /// Structure used to convey errors to users of the library
     pub struct Error {
         why: String,
     }
@@ -30,10 +49,12 @@ pub mod error {
     }
 
     impl Error {
+        /// Construct an error from a String
         pub fn from_string(why: String) -> Error {
             return Error { why: why };
         }
 
+        /// Construct an error from a string reference
         pub fn from_str(why: &str) -> Error {
             return Error {
                 why: why.to_string(),

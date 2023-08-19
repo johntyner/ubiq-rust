@@ -1,4 +1,37 @@
 //! Interfaces for decrypting data
+//!
+//! # Example
+//! ```rust
+//! use ubiq::credentials::Credentials;
+//! use ubiq::encryption::encrypt;
+//! use ubiq::decryption::Decryption;
+//!
+//! let creds = Credentials::new(None, None).unwrap();
+//! let ct = encrypt(&creds, b"abc").unwrap();
+//!
+//! let mut dec = Decryption::new(&creds).unwrap();
+//!
+//! /*
+//!  * ct can be passed to the decryption process in
+//!  * as many or as few pieces as desired
+//!  */
+//!
+//! let mut pt = dec.begin().unwrap();
+//! pt.extend(dec.update(&ct[0..3]).unwrap());
+//! pt.extend(dec.update(&ct[3..9]).unwrap());
+//! pt.extend(dec.update(&ct[9..24]).unwrap());
+//! pt.extend(dec.update(&ct[24..]).unwrap());
+//! pt.extend(dec.end().unwrap());
+//!
+//! assert!(pt != ct);
+//! assert!(pt == b"abc");
+//!
+//! /*
+//!  * the dec object can now be reused by following the
+//!  * begin(), update()..., end() process shown above for
+//!  * as many times as desired.
+//!  */
+//! ```
 
 use crate::algorithm::Algorithm;
 use crate::client::Client;
@@ -118,6 +151,14 @@ impl Drop for DecryptionSession<'_> {
     }
 }
 
+/// Structure encompassing parameters used for decrypting data
+///
+/// Using this structure, a caller is able to decrypt a ciphertext
+/// by feeding it to the member functions in a piecewise fashion
+/// (or by doing so all at once). In addition, if multiple, unique
+/// ciphertexts were encrypted with the same key, this object can
+/// be used to decrypt them without having to communicate with the
+/// server multiple times.
 pub struct Decryption<'a> {
     client: std::rc::Rc<Client>,
     host: std::rc::Rc<String>,
@@ -129,6 +170,7 @@ pub struct Decryption<'a> {
 }
 
 impl Decryption<'_> {
+    /// Create a new decryption object
     pub fn new<'a>(creds: &Credentials) -> Result<Decryption<'a>> {
         Ok(Decryption {
             client: std::rc::Rc::new(Client::new(creds)),
@@ -270,6 +312,10 @@ impl Drop for Decryption<'_> {
     }
 }
 
+/// Perform a single decryption
+///
+/// The entire ciphertext must be passed in the `ct` parameter.
+/// If decryption is successful, the plaintext is returned in a Vector.
 pub fn decrypt(c: &Credentials, ct: &[u8]) -> Result<Vec<u8>> {
     Decryption::new(&c)?.cipher(&ct)
 }
