@@ -56,7 +56,7 @@ struct EncryptionSession<'a> {
 }
 
 impl EncryptionSession<'_> {
-    pub fn new<'a>(
+    fn new<'a>(
         creds: &Credentials,
         uses: usize,
     ) -> Result<EncryptionSession<'a>> {
@@ -107,7 +107,7 @@ impl EncryptionSession<'_> {
         })
     }
 
-    pub fn close(&mut self) -> Result<()> {
+    fn close(&mut self) -> Result<()> {
         let cur = self.key.uses.cur;
         let max = self.key.uses.max;
 
@@ -226,7 +226,7 @@ impl Encryption<'_> {
         self.session.close()
     }
 
-    pub fn cipher(&mut self, pt: &[u8]) -> Result<Vec<u8>> {
+    fn cipher(&mut self, pt: &[u8]) -> Result<Vec<u8>> {
         let mut ct = self.begin()?;
         ct.extend(self.update(pt)?);
         ct.extend(self.end()?);

@@ -254,7 +254,7 @@ impl Decryption<'_> {
         }
     }
 
-    pub fn cipher(&mut self, ct: &[u8]) -> Result<Vec<u8>> {
+    fn cipher(&mut self, ct: &[u8]) -> Result<Vec<u8>> {
         let mut pt = self.begin()?;
         pt.extend(self.update(ct)?);
         pt.extend(self.end()?);
