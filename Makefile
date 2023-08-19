@@ -8,6 +8,9 @@ build b:
 test t:
 	$(QUIET)cargo $(@)
 
+doc d:
+	$(QUIET)cargo $(@) --no-deps
+
 fmt:
 	$(QUIET)find src tests -name "*.rs" \
 	  -exec rustfmt -l --edition 2021 {} \;
@@ -16,4 +19,4 @@ devclean:
 	$(QUIET)find . -name "*~" -exec rm -f {} \;
 
 clean: devclean
-	$(QUIET)rm -rf target/
+	$(QUIET)cargo $(@)
