@@ -46,7 +46,7 @@
 //!
 //! /*
 //!  * if the encryption object was created for more than
-//!  * a single use (by passing a number larger that 1 to
+//!  * a single use (by passing a number larger than 1 to
 //!  * the new() function), then the enc object could now
 //!  * be reused by following the begin(), update()...,
 //!  * end() process shown above for as many times as

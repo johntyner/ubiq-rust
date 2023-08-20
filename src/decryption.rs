@@ -61,6 +61,9 @@ const DECRYPTION_KEY_PATH: &str = "api/v0/decryption/key";
 #[derive(serde::Deserialize)]
 struct NewDecryptionResponse {
     encrypted_private_key: String,
+    // this should just be a String, but the server is currently
+    // returning `null` in this variable.
+    // see also: DecryptionSession::close()
     encryption_session: Option<String>,
     key_fingerprint: String,
     wrapped_data_key: String,
@@ -135,17 +138,15 @@ impl DecryptionSession<'_> {
     }
 
     fn close(&mut self) -> Result<()> {
-        if self.key.uses > 0 {
-            let mut path = format!(
-                "{}/{}/{}",
-                self.host, DECRYPTION_KEY_PATH, self.key.fingerprint
-            );
-            if self.id.is_some() {
-                path = format!("{}/{}", path, self.id.as_ref().unwrap());
-            }
-
+        if self.key.uses > 0 && self.id.is_some() {
             self.client.patch(
-                &path,
+                &format!(
+                    "{}/{}/{}/{}",
+                    self.host,
+                    DECRYPTION_KEY_PATH,
+                    self.key.fingerprint,
+                    self.id.as_ref().unwrap(),
+                ),
                 "application/json".to_string(),
                 format!(
                     "{{\
