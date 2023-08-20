@@ -1,6 +1,21 @@
 //! Interfaces for decrypting data
 //!
-//! # Example
+//! # Examples
+//! ## Simple
+//! ```rust
+//! use ubiq::credentials::Credentials;
+//! use ubiq::encryption::encrypt;
+//! use ubiq::decryption::decrypt;
+//!
+//! let creds = Credentials::new(None, None).unwrap();
+//!
+//! let ct = encrypt(&creds, b"abc").unwrap();
+//! let pt = decrypt(&creds, &ct).unwrap();
+//!
+//! assert!(pt != ct);
+//! assert!(pt == b"abc");
+//! ```
+//! ## Piecewise
 //! ```rust
 //! use ubiq::credentials::Credentials;
 //! use ubiq::encryption::encrypt;
@@ -183,6 +198,11 @@ impl Decryption<'_> {
         })
     }
 
+    /// Begin a new decryption "session"
+    ///
+    /// Decryption of a ciphertext consists of a `begin()`, some number
+    /// of `update()` calls, and an `end()`. It is an error to call
+    /// `begin()` more than once without an intervening `end()`.
     pub fn begin(&mut self) -> Result<Vec<u8>> {
         if self.session.is_some()
             && self.session.as_ref().unwrap().ctx.is_some()
@@ -190,9 +210,17 @@ impl Decryption<'_> {
             return Err(Error::from_str("decryption already in progress"));
         }
 
+        // because no ciphertext has been input yet, no plaintext
+        // is returned, but this is done so that the Encryption and
+        // Decryption interfaces are the same/similar
         Ok(Vec::<u8>::new())
     }
 
+    /// Input (some) ciphertext for decryption
+    ///
+    /// The update function writes data into the Decryption object.
+    /// Plaintext data may or may not be returned with each call to
+    /// this function.
     pub fn update(&mut self, ct: &[u8]) -> Result<Vec<u8>> {
         self.buf.extend(ct);
 
@@ -266,6 +294,18 @@ impl Decryption<'_> {
         Ok(pt)
     }
 
+    /// End a decryption "session"
+    ///
+    /// After all ciphertext has been written to the object via the
+    /// `update()` function, the caller must call this function to finalize
+    /// the decryption. Any remaining plaintext will be returned. If the
+    /// algorithm in use is authenticated, an error may be returned instead
+    /// if the authentication process fails.
+    ///
+    /// Note that if the algorithm in use is authenticated, any error in
+    /// the authentication process will not be reported until this function
+    /// is called. Therefore, when using an authenticated algorithm, output
+    /// should not be trusted until this function returns successfully.
     pub fn end(&mut self) -> Result<Vec<u8>> {
         let mut pt = Vec::<u8>::new();
 
@@ -290,6 +330,13 @@ impl Decryption<'_> {
         Ok(pt)
     }
 
+    /// Clear the key and other session information
+    ///
+    /// In general, callers do not need to call this function as it is
+    /// invoked automatically when the Decryption object is dropped.
+    /// However, callers may call it themselves to clear session information
+    /// early and/or to determine if there was any error communicating with
+    /// the server during session destruction.
     pub fn close(&mut self) -> Result<()> {
         let session = std::mem::replace(&mut self.session, None);
         match session {
@@ -298,7 +345,11 @@ impl Decryption<'_> {
         }
     }
 
-    fn cipher(&mut self, ct: &[u8]) -> Result<Vec<u8>> {
+    /// Decrypt a single ciphertext in one shot
+    ///
+    /// This function is equivalent to calling `begin()`, `update(ct)`,
+    /// and `end()`
+    pub fn cipher(&mut self, ct: &[u8]) -> Result<Vec<u8>> {
         let mut pt = self.begin()?;
         pt.extend(self.update(ct)?);
         pt.extend(self.end()?);
@@ -312,10 +363,10 @@ impl Drop for Decryption<'_> {
     }
 }
 
-/// Perform a single decryption
+/// Decrypt a single ciphertext
 ///
-/// The entire ciphertext must be passed in the `ct` parameter.
-/// If decryption is successful, the plaintext is returned in a Vector.
+/// This function is equivalent to creating a new Decryption object
+/// calling `begin()`, `update(pt)`, and `end()`.
 pub fn decrypt(c: &Credentials, ct: &[u8]) -> Result<Vec<u8>> {
     Decryption::new(&c)?.cipher(&ct)
 }

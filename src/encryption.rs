@@ -1,4 +1,58 @@
 //! Interfaces for encrypting data
+//!
+//! # Examples
+//! ## Simple
+//! ```rust
+//! use ubiq::credentials::Credentials;
+//! use ubiq::encryption::encrypt;
+//! use ubiq::decryption::decrypt;
+//!
+//! let creds = Credentials::new(None, None).unwrap();
+//!
+//! let ct = encrypt(&creds, b"abc").unwrap();
+//! let pt = decrypt(&creds, &ct).unwrap();
+//!
+//! assert!(pt != ct);
+//! assert!(pt == b"abc");
+//! ```
+//! ## Piecewise
+//! ```rust
+//! use ubiq::credentials::Credentials;
+//! use ubiq::encryption::Encryption;
+//! use ubiq::decryption::decrypt;
+//!
+//! let creds = Credentials::new(None, None).unwrap();
+//! let pt = b"abcdefghijklmnopqrstuvwxyz";
+//!
+//! // note that we pass `1` to the new() function, indicating
+//! // that the encryption key will be used once
+//! let mut enc = Encryption::new(&creds, 1).unwrap();
+//!
+//! /*
+//!  * pt can be passed to the encryption process in
+//!  * as many or as few pieces as desired
+//!  */
+//!
+//! let mut ct = enc.begin().unwrap();
+//! ct.extend(enc.update(&pt[0..4]).unwrap());
+//! ct.extend(enc.update(&pt[4..11]).unwrap());
+//! ct.extend(enc.update(&pt[11..]).unwrap());
+//! ct.extend(enc.end().unwrap());
+//!
+//! let rec = decrypt(&creds, &ct).unwrap();
+//!
+//! assert!(pt != &ct[..]);
+//! assert!(pt == &rec[..]);
+//!
+//! /*
+//!  * if the encryption object was created for more than
+//!  * a single use (by passing a number larger that 1 to
+//!  * the new() function), then the enc object could now
+//!  * be reused by following the begin(), update()...,
+//!  * end() process shown above for as many times as
+//!  * specified by the call to new()
+//!  */
+//! ```
 
 use crate::algorithm;
 use crate::algorithm::Algorithm;
@@ -154,6 +208,13 @@ impl Drop for EncryptionSession<'_> {
 }
 
 #[derive(Debug)]
+/// Structure encompassing parameters used for encrypting data
+///
+/// Using this structure, a caller is able to encrypt a plaintext
+/// by feeding it to the member functions in a piecewise fashion
+/// (or by doing so all at once). The encryption object can be reused
+/// to encrypt as many plaintexts as were initially specified by the
+/// call to `new()`
 pub struct Encryption<'a> {
     session: EncryptionSession<'a>,
 }
@@ -165,6 +226,11 @@ impl Encryption<'_> {
         })
     }
 
+    /// Begin a new encryption "session"
+    ///
+    /// Encryption of a plaintext consists of a `begin()`, some number
+    /// of `update()` calls, and an `end()`. It is an error to call
+    /// `begin()` more than once without an intervening `end()`.
     pub fn begin(&mut self) -> Result<Vec<u8>> {
         if self.session.ctx.is_some() {
             return Err(Error::from_str("encryption already in progress"));
@@ -204,6 +270,11 @@ impl Encryption<'_> {
         Ok(ct)
     }
 
+    /// Input (some) plaintext for encryption
+    ///
+    /// The update function writes data into the Encryption object.
+    /// Ciphertext data may or may not be returned with each call to
+    /// this function.
     pub fn update(&mut self, pt: &[u8]) -> Result<Vec<u8>> {
         if self.session.ctx.is_none() {
             return Err(Error::from_str("encryption not yet started"));
@@ -212,6 +283,12 @@ impl Encryption<'_> {
         support::encryption::update(self.session.ctx.as_mut().unwrap(), pt)
     }
 
+    /// End an encryption "session"
+    ///
+    /// After all plaintext has been written to the object via the
+    /// `update()` function, the caller must call this function to finalize
+    /// the encryption. Any remaining plaintext will be returned along
+    /// with any authentication information produced by the algorithm.
     pub fn end(&mut self) -> Result<Vec<u8>> {
         if self.session.ctx.is_none() {
             return Err(Error::from_str("encryption not yet started"));
@@ -224,11 +301,22 @@ impl Encryption<'_> {
         return res;
     }
 
+    /// Clear the key and other session information
+    ///
+    /// In general, callers do not need to call this function as it is
+    /// invoked automatically when the Encryption object is dropped.
+    /// However, callers may call it themselves to clear session information
+    /// early and/or to determine if there was any error communicating with
+    /// the server during session destruction.
     pub fn close(&mut self) -> Result<()> {
         self.session.close()
     }
 
-    fn cipher(&mut self, pt: &[u8]) -> Result<Vec<u8>> {
+    /// Encrypt a single plaintext in one shot
+    ///
+    /// This function is equivalent to calling `begin()`, `update(pt)`,
+    /// and `end()`
+    pub fn cipher(&mut self, pt: &[u8]) -> Result<Vec<u8>> {
         let mut ct = self.begin()?;
         ct.extend(self.update(pt)?);
         ct.extend(self.end()?);
@@ -242,6 +330,10 @@ impl Drop for Encryption<'_> {
     }
 }
 
+/// Encrypt a single plaintext with a unique key
+///
+/// This function is equivalent to creating a new Encryption object
+/// for a single use and calling `begin()`, `update(pt)`, and `end()`.
 pub fn encrypt(c: &Credentials, pt: &[u8]) -> Result<Vec<u8>> {
     Encryption::new(&c, 1)?.cipher(&pt)
 }
