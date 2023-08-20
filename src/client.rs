@@ -38,17 +38,6 @@ impl Client {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn get(&self, url: &str) -> Result<Response> {
-        match reqwest::Url::parse(url) {
-            Err(e) => Err(Error::from_string(e.to_string())),
-            Ok(u) => self.execute(reqwest::blocking::Request::new(
-                reqwest::Method::GET,
-                u,
-            )),
-        }
-    }
-
     pub fn post(
         &self,
         url: &str,
@@ -227,13 +216,6 @@ mod tests {
             "123".to_string(),
             None,
         ))
-    }
-
-    #[test]
-    fn get() -> Result<()> {
-        let rsp = new_client().get(&"https://httpbin.org/get".to_string())?;
-        assert!(rsp.status().is_success());
-        Ok(())
     }
 
     fn upload(
