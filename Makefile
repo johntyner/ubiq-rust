@@ -12,11 +12,7 @@ doc d:
 	$(QUIET)cargo $(@) --no-deps
 
 fmt:
-	$(QUIET)[ -d src ] && find src -name "*.rs" \
-	  -exec rustfmt -l --edition 2021 {} \; ; true
-
-	$(QUIET)[ -d tests ] && find tests -name "*.rs" \
-	  -exec rustfmt -l --edition 2021 {} \; ; true
+	$(QUIET)cargo $(@) --all -- -l
 
 devclean:
 	$(QUIET)find . -name "*~" -exec rm -f {} \;
