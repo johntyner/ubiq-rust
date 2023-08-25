@@ -62,4 +62,16 @@ pub mod error {
             Error::new(&e.to_string())
         }
     }
+
+    impl From<rsa::pkcs8::Error> for Error {
+        fn from(e: rsa::pkcs8::Error) -> Self {
+            Error::new(&e.to_string())
+        }
+    }
+
+    impl From<rsa::Error> for Error {
+        fn from(e: rsa::Error) -> Self {
+            Error::new(&e.to_string())
+        }
+    }
 }
