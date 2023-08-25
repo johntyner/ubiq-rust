@@ -111,7 +111,7 @@ impl DecryptionSession<'_> {
         )?;
 
         match rsp.json::<NewDecryptionResponse>() {
-            Err(e) => Err(Error::from_string(e.to_string())),
+            Err(e) => Err(Error::new(&e.to_string())),
             Ok(msg) => Ok(DecryptionSession {
                 client: client,
                 host: host,
@@ -208,7 +208,7 @@ impl Decryption<'_> {
         if self.session.is_some()
             && self.session.as_ref().unwrap().ctx.is_some()
         {
-            return Err(Error::from_str("decryption already in progress"));
+            return Err(Error::new("decryption already in progress"));
         }
 
         // because no ciphertext has been input yet, no plaintext
@@ -235,7 +235,7 @@ impl Decryption<'_> {
                 let hdr = Header::deserialize(&buf)?;
 
                 if hdr.version != 0 {
-                    return Err(Error::from_str("unsupported header version"));
+                    return Err(Error::new("unsupported header version"));
                 }
 
                 if self.session.is_some()

@@ -22,23 +22,17 @@ impl CipherCtx<'_> {
             "aes-256-gcm" => c = openssl::cipher::Cipher::aes_256_gcm(),
             "aes-128-gcm" => c = openssl::cipher::Cipher::aes_128_gcm(),
             _ => {
-                return Err(Error::from_string(format!(
+                return Err(Error::new(&format!(
                     "unsupported algorithm: {}",
                     algo.name
                 )))
             }
         }
 
-        let ctx: openssl::cipher_ctx::CipherCtx;
-        match openssl::cipher_ctx::CipherCtx::new() {
-            Err(e) => return Err(Error::from_string(e.to_string())),
-            Ok(c) => ctx = c,
-        }
-
         Ok(CipherCtx {
             algo: algo,
             cipher: c,
-            ctx: ctx,
+            ctx: openssl::cipher_ctx::CipherCtx::new()?,
         })
     }
 }

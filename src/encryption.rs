@@ -132,7 +132,7 @@ impl EncryptionSession<'_> {
 
         let msg: NewEncryptionResponse;
         match rsp.json::<NewEncryptionResponse>() {
-            Err(e) => return Err(Error::from_string(e.to_string())),
+            Err(e) => return Err(Error::new(&e.to_string())),
             Ok(ne) => msg = ne,
         }
 
@@ -190,7 +190,7 @@ impl EncryptionSession<'_> {
             )?;
 
             if !rsp.status().is_success() {
-                return Err(Error::from_string(format!(
+                return Err(Error::new(&format!(
                     "failed to update encryption key: {}",
                     rsp.status().as_str()
                 )));
@@ -233,9 +233,9 @@ impl Encryption<'_> {
     /// `begin()` more than once without an intervening `end()`.
     pub fn begin(&mut self) -> Result<Vec<u8>> {
         if self.session.ctx.is_some() {
-            return Err(Error::from_str("encryption already in progress"));
+            return Err(Error::new("encryption already in progress"));
         } else if self.session.key.uses.cur >= self.session.key.uses.max {
-            return Err(Error::from_str("encryption key has expired"));
+            return Err(Error::new("encryption key has expired"));
         }
 
         let mut iv = Vec::<u8>::new();
@@ -277,7 +277,7 @@ impl Encryption<'_> {
     /// this function.
     pub fn update(&mut self, pt: &[u8]) -> Result<Vec<u8>> {
         if self.session.ctx.is_none() {
-            return Err(Error::from_str("encryption not yet started"));
+            return Err(Error::new("encryption not yet started"));
         }
 
         support::encryption::update(self.session.ctx.as_mut().unwrap(), pt)
@@ -291,7 +291,7 @@ impl Encryption<'_> {
     /// with any authentication information produced by the algorithm.
     pub fn end(&mut self) -> Result<Vec<u8>> {
         if self.session.ctx.is_none() {
-            return Err(Error::from_str("encryption not yet started"));
+            return Err(Error::new("encryption not yet started"));
         }
 
         let res =

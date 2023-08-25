@@ -45,7 +45,7 @@ impl Header<'_> {
 
     pub fn can_deserialize(v: &[u8]) -> Result<usize> {
         if v.len() > 0 && v[0] != 0 {
-            return Err(Error::from_str("invalid header version"));
+            return Err(Error::new("invalid header version"));
         }
 
         if v.len() < 6 {

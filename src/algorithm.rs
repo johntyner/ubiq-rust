@@ -42,7 +42,7 @@ pub fn get_by_id(id: usize) -> Result<&'static Algorithm<'static>> {
         return Ok(&ALGORITHM[id]);
     }
 
-    Err(Error::from_str("algorithm id not found"))
+    Err(Error::new("algorithm id not found"))
 }
 
 pub fn get_by_name(name: &str) -> Result<&'static Algorithm<'static>> {
@@ -54,5 +54,5 @@ pub fn get_by_name(name: &str) -> Result<&'static Algorithm<'static>> {
         }
     }
 
-    Err(Error::from_str("algorithm name not found"))
+    Err(Error::new("algorithm name not found"))
 }

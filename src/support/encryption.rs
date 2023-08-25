@@ -1,4 +1,3 @@
-use crate::error::Error;
 use crate::result::Result;
 use crate::support;
 
@@ -10,16 +9,11 @@ pub fn init<'a>(
 ) -> Result<support::cipher::CipherCtx<'a>> {
     let mut ctx = support::cipher::CipherCtx::new(algo)?;
 
-    let res = ctx.ctx.encrypt_init(Some(ctx.cipher), Some(key), Some(iv));
-    if res.is_err() {
-        return Err(Error::from_string(res.unwrap_err().to_string()));
-    }
+    ctx.ctx
+        .encrypt_init(Some(ctx.cipher), Some(key), Some(iv))?;
 
     if algo.len.tag != 0 && aad.is_some() {
-        let res = ctx.ctx.cipher_update(aad.unwrap(), None);
-        if res.is_err() {
-            return Err(Error::from_string(res.unwrap_err().to_string()));
-        }
+        ctx.ctx.cipher_update(aad.unwrap(), None)?;
     }
 
     Ok(ctx)
@@ -30,29 +24,17 @@ pub fn update(
     pt: &[u8],
 ) -> Result<Vec<u8>> {
     let mut ct = Vec::<u8>::new();
-
-    match ctx.ctx.cipher_update_vec(pt, &mut ct) {
-        Err(e) => Err(Error::from_string(e.to_string())),
-        Ok(_) => Ok(ct),
-    }
+    ctx.ctx.cipher_update_vec(pt, &mut ct)?;
+    Ok(ct)
 }
 
 pub fn finalize(ctx: &mut support::cipher::CipherCtx) -> Result<Vec<u8>> {
     let mut ct = Vec::<u8>::new();
+    let s = ctx.ctx.cipher_final_vec(&mut ct)?;
 
-    match ctx.ctx.cipher_final_vec(&mut ct) {
-        Err(e) => return Err(Error::from_string(e.to_string())),
-        Ok(s) => {
-            if ctx.ctx.tag_length() > 0 {
-                ct.resize(s + ctx.ctx.tag_length(), 0);
-                let res = ctx.ctx.tag(&mut ct[s..]);
-                if res.is_err() {
-                    return Err(Error::from_string(
-                        res.unwrap_err().to_string(),
-                    ));
-                }
-            }
-        }
+    if ctx.ctx.tag_length() > 0 {
+        ct.resize(s + ctx.ctx.tag_length(), 0);
+        ctx.ctx.tag(&mut ct[s..])?;
     }
 
     Ok(ct)

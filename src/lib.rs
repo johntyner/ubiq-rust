@@ -36,8 +36,8 @@ pub mod result {
 
 /// Errors returned by the Ubiq library
 pub mod error {
-    #[derive(Debug)]
     /// Structure used to convey errors to users of the library
+    #[derive(Debug)]
     pub struct Error {
         why: String,
     }
@@ -49,16 +49,17 @@ pub mod error {
     }
 
     impl Error {
-        /// Construct an error from a String
-        pub fn from_string(why: String) -> Error {
-            return Error { why: why };
-        }
-
         /// Construct an error from a string reference
-        pub fn from_str(why: &str) -> Error {
+        pub fn new(why: &str) -> Error {
             return Error {
                 why: why.to_string(),
             };
+        }
+    }
+
+    impl From<openssl::error::ErrorStack> for Error {
+        fn from(e: openssl::error::ErrorStack) -> Self {
+            Error::new(&e.to_string())
         }
     }
 }

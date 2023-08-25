@@ -64,7 +64,7 @@ impl Client {
         content: String,
     ) -> Result<Response> {
         match reqwest::Url::parse(url) {
-            Err(e) => Err(Error::from_string(e.to_string())),
+            Err(e) => Err(Error::new(&e.to_string())),
             Ok(u) => self.execute(
                 self.client
                     .request(method, u)
@@ -108,9 +108,7 @@ impl Client {
             None => (),
             Some(body) => match body.as_bytes() {
                 None => {
-                    return Err(Error::from_str(
-                        "streaming requests not supported",
-                    ));
+                    return Err(Error::new("streaming requests not supported"));
                 }
                 Some(b) => digest.update(b)?,
             },
@@ -191,7 +189,7 @@ impl Client {
         }
 
         match self.client.execute(req) {
-            Err(e) => Err(Error::from_string(e.to_string())),
+            Err(e) => Err(Error::new(&e.to_string())),
             Ok(r) => Ok(r),
         }
     }

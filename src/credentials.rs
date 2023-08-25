@@ -74,9 +74,7 @@ impl Credentials {
 
         match dirs::home_dir() {
             None => {
-                return Err(Error::from_str(
-                    "unable to determine home directory",
-                ));
+                return Err(Error::new("unable to determine home directory"));
             }
             Some(mut home) => {
                 home.push(".ubiq");
@@ -84,7 +82,7 @@ impl Credentials {
 
                 match home.to_str() {
                     None => {
-                        return Err(Error::from_str(
+                        return Err(Error::new(
                             "unable to convert path to string, non-UTF-8?",
                         ));
                     }
@@ -127,11 +125,9 @@ impl Credentials {
         let mut ini = configparser::ini::Ini::new_cs();
 
         match ini.read(input) {
-            Err(s) => return Err(Error::from_string(s)),
+            Err(s) => return Err(Error::new(&s)),
             Ok(profs) => match profs.get(prof) {
-                None => {
-                    return Err(Error::from_str("specified profile not found"))
-                }
+                None => return Err(Error::new("specified profile not found")),
                 Some(creds) => {
                     for k in [PAPI_ID, SAPI_ID, SRSA_ID, HOST_ID] {
                         let v = creds.get(k);
@@ -164,18 +160,18 @@ impl Credentials {
 
     fn from_file(path: &String, prof: &String) -> Result<Credentials> {
         match std::fs::metadata(path) {
-            Err(e) => return Err(Error::from_string(e.to_string())),
+            Err(e) => return Err(Error::new(&e.to_string())),
             Ok(m) => {
                 if m.len() > MAX_CREDENTIALS_SIZE as u64 {
-                    return Err(Error::from_str("credentials file too big"));
+                    return Err(Error::new("credentials file too big"));
                 }
             }
         }
 
         match std::fs::read(path) {
-            Err(e) => Err(Error::from_string(e.to_string())),
+            Err(e) => Err(Error::new(&e.to_string())),
             Ok(v) => match String::from_utf8(v) {
-                Err(e) => Err(Error::from_string(e.to_string())),
+                Err(e) => Err(Error::new(&e.to_string())),
                 Ok(s) => Self::from_string(s, prof),
             },
         }
@@ -243,7 +239,7 @@ impl Credentials {
 
         for k in [PAPI_ID, SAPI_ID, SRSA_ID] {
             if creds.params.get(&k.to_string()).is_none() {
-                return Err(Error::from_str("invalid/incomplete credentials"));
+                return Err(Error::new("invalid/incomplete credentials"));
             }
         }
 

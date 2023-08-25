@@ -1,4 +1,3 @@
-use crate::error::Error;
 use crate::result::Result;
 
 pub mod base64;
@@ -9,17 +8,10 @@ pub mod encryption;
 pub mod hmac;
 
 pub fn getrandom(buf: &mut [u8]) -> Result<()> {
-    match openssl::rand::rand_bytes(buf) {
-        Err(e) => Err(Error::from_string(e.to_string())),
-        Ok(_) => Ok(()),
-    }
+    Ok(openssl::rand::rand_bytes(buf)?)
 }
 
-fn openssl_unwrap_data_key(
-    wdk: &[u8],
-    epk: &str,
-    srsa: &str,
-) -> core::result::Result<Vec<u8>, openssl::error::ErrorStack> {
+pub fn unwrap_data_key(wdk: &[u8], epk: &str, srsa: &str) -> Result<Vec<u8>> {
     let mut raw: Vec<u8> = Vec::new();
 
     let pk = openssl::pkey::PKey::private_key_from_pem_passphrase(
@@ -34,11 +26,4 @@ fn openssl_unwrap_data_key(
     pk_ctx.decrypt_to_vec(wdk, &mut raw)?;
 
     Ok(raw)
-}
-
-pub fn unwrap_data_key(wdk: &[u8], epk: &str, srsa: &str) -> Result<Vec<u8>> {
-    match openssl_unwrap_data_key(wdk, epk, srsa) {
-        Err(e) => Err(Error::from_string(e.to_string())),
-        Ok(k) => Ok(k),
-    }
 }

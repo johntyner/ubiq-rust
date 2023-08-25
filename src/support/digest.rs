@@ -7,30 +7,21 @@ pub struct DigestCtx {
 
 impl DigestCtx {
     pub fn new(name: &str) -> Result<Self> {
-        let mut ctx: openssl::md_ctx::MdCtx;
         let md: &openssl::md::MdRef;
-
         match name {
             "sha512" => md = openssl::md::Md::sha512(),
-            _ => return Err(Error::from_str("unsupported hash algorithm")),
+            _ => return Err(Error::new("unsupported hash algorithm")),
         }
 
-        match openssl::md_ctx::MdCtx::new() {
-            Err(e) => return Err(Error::from_string(e.to_string())),
-            Ok(c) => ctx = c,
-        }
+        let mut ctx = openssl::md_ctx::MdCtx::new()?;
+        ctx.digest_init(md)?;
 
-        match ctx.digest_init(md) {
-            Err(e) => Err(Error::from_string(e.to_string())),
-            Ok(_) => Ok(Self { ctx: ctx }),
-        }
+        Ok(Self { ctx: ctx })
     }
 
     pub fn update(&mut self, m: &[u8]) -> Result<()> {
-        match self.ctx.digest_update(m) {
-            Err(e) => Err(Error::from_string(e.to_string())),
-            Ok(_) => Ok(()),
-        }
+        self.ctx.digest_update(m)?;
+        Ok(())
     }
 
     pub fn finalize(&mut self) -> Result<Vec<u8>> {
@@ -40,9 +31,7 @@ impl DigestCtx {
         let res = self.ctx.digest_final(&mut s);
         let _ = self.ctx.reset();
 
-        match res {
-            Err(e) => Err(Error::from_string(e.to_string())),
-            Ok(_) => Ok(s),
-        }
+        res?;
+        Ok(s)
     }
 }
