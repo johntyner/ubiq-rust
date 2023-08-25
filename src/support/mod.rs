@@ -4,7 +4,6 @@ pub mod base64;
 pub mod cipher;
 pub mod decryption;
 pub mod encryption;
-pub mod hmac;
 
 pub fn getrandom(buf: &mut [u8]) -> Result<()> {
     Ok(openssl::rand::rand_bytes(buf)?)

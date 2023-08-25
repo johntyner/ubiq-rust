@@ -3,6 +3,7 @@ use crate::error::Error;
 use crate::result::Result;
 use crate::support;
 
+use hmac::Mac;
 use sha2::Digest;
 
 type Response = reqwest::blocking::Response;
@@ -16,7 +17,7 @@ pub struct Client {
 }
 
 pub fn sign_header(
-    dig: &mut support::hmac::HmacCtx,
+    hmac: &mut hmac::Hmac<sha2::Sha512>,
     headers: &mut Vec<String>,
     header: &str,
     value: &str,
@@ -24,7 +25,7 @@ pub fn sign_header(
     let lh = header.to_lowercase();
     let m = format!("{}: {}\n", lh, value);
 
-    dig.update(m.as_bytes())?;
+    hmac.update(m.as_bytes());
     headers.push(lh);
 
     Ok(())
@@ -149,7 +150,8 @@ impl Client {
 
         let mut headers = Vec::<String>::new();
         let mut hmac =
-            support::hmac::HmacCtx::new("sha512", self.sapi.as_bytes())?;
+            hmac::Hmac::<sha2::Sha512>::new_from_slice(self.sapi.as_bytes())
+                .unwrap();
         sign_header(&mut hmac, &mut headers, "(created)", &created)?;
         sign_header(&mut hmac, &mut headers, "(request-target)", &reqtgt)?;
         for h in ["Content-Length", "Content-Type", "Date", "Digest", "Host"] {
@@ -165,7 +167,7 @@ impl Client {
                 }
             }
         }
-        let sum = hmac.finalize()?;
+        let sum = hmac.finalize().into_bytes();
 
         {
             let hdrs = req.headers_mut();
