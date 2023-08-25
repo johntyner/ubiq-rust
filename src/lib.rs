@@ -28,6 +28,7 @@ pub mod credentials;
 pub mod decryption;
 pub mod encryption;
 pub(crate) mod header;
+pub(crate) mod session;
 
 pub(crate) mod base64 {
     use base64::Engine;

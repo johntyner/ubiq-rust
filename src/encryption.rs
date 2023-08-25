@@ -55,17 +55,15 @@
 //! ```
 
 use crate::algorithm;
-use crate::algorithm::Algorithm;
-use crate::base64;
 use crate::cipher;
 use crate::client::Client;
 use crate::credentials::Credentials;
 use crate::error::Error;
 use crate::header::Header;
 use crate::result::Result;
+use crate::session;
 
 use rand::RngCore;
-use rsa::pkcs8::DecodePrivateKey;
 
 const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
 
@@ -87,104 +85,33 @@ struct NewEncryptionResponse {
 }
 
 #[derive(Debug)]
-struct EncryptionSessionKeyUses {
-    max: usize,
-    cur: usize,
+/// Structure encompassing parameters used for encrypting data
+///
+/// Using this structure, a caller is able to encrypt a plaintext
+/// by feeding it to the member functions in a piecewise fashion
+/// (or by doing so all at once). The encryption object can be reused
+/// to encrypt as many plaintexts as were initially specified by the
+/// call to `new()`
+pub struct Encryption<'a> {
+    session: session::Session<'a>,
 }
 
-#[derive(Debug)]
-struct EncryptionSessionKey {
-    raw: Vec<u8>,
-    enc: Vec<u8>,
-
-    fingerprint: String,
-
-    uses: EncryptionSessionKeyUses,
-}
-
-#[derive(Debug)]
-struct EncryptionSession<'a> {
-    client: Client,
-    host: String,
-
-    id: String,
-
-    key: EncryptionSessionKey,
-
-    algo: &'a Algorithm<'a>,
-    ctx: Option<cipher::CipherCtx>,
-}
-
-impl EncryptionSession<'_> {
-    fn new<'a>(
-        creds: &Credentials,
-        uses: usize,
-    ) -> Result<EncryptionSession<'a>> {
-        let client = Client::new(&creds);
-        let host = creds.host().clone();
-
-        let rsp = client.post(
-            &format!("{}/{}", host, ENCRYPTION_KEY_PATH),
-            "application/json".to_string(),
-            format!(
-                "{{\
-                   \"uses\": {}\
-                 }}",
-                uses
-            ),
-        )?;
-
-        let msg: NewEncryptionResponse;
-        match rsp.json::<NewEncryptionResponse>() {
-            Err(e) => return Err(Error::new(&e.to_string())),
-            Ok(ne) => msg = ne,
-        }
-
-        Ok(EncryptionSession {
-            client: client,
-            host: host,
-
-            id: msg.encryption_session,
-
-            key: EncryptionSessionKey {
-                raw: rsa::RsaPrivateKey::from_pkcs8_encrypted_pem(
-                    &msg.encrypted_private_key,
-                    creds.srsa().as_bytes(),
-                )?
-                .decrypt(
-                    rsa::oaep::Oaep::new::<sha1::Sha1>(),
-                    &base64::decode(&msg.wrapped_data_key)?,
-                )?,
-                enc: base64::decode(&msg.encrypted_data_key)?,
-
-                fingerprint: msg.key_fingerprint,
-
-                uses: EncryptionSessionKeyUses {
-                    max: msg.max_uses,
-                    cur: 0,
-                },
-            },
-
-            algo: algorithm::get_by_name(&msg.security_model.algorithm)?,
-            ctx: None,
-        })
-    }
-
-    fn close(&mut self) -> Result<()> {
-        let cur = self.key.uses.cur;
-        let max = self.key.uses.max;
-
-        self.key.uses.cur = 0;
-        self.key.uses.max = 0;
-
-        if cur < max {
-            let rsp = self.client.patch(
+impl Encryption<'_> {
+    fn s_close(
+        client: &Client,
+        host: &String,
+        id: &Option<String>,
+        fp: &String,
+        uses: &session::SessionKeyUses,
+    ) -> Result<()> {
+        if uses.cur < uses.max {
+            let rsp = client.patch(
                 &format!(
                     "{}/{}/{}/{}",
-                    self.host,
+                    host,
                     ENCRYPTION_KEY_PATH,
-                    self.key.fingerprint,
-                    self.id
+                    fp,
+                    id.as_ref().unwrap(),
                 ),
                 "application/json".to_string(),
                 format!(
@@ -192,7 +119,7 @@ impl EncryptionSession<'_> {
                        \"requested\": {},\
                        \"actual\": {}\
                      }}",
-                    max, cur,
+                    uses.max, uses.cur,
                 ),
             )?;
 
@@ -206,31 +133,40 @@ impl EncryptionSession<'_> {
 
         Ok(())
     }
-}
 
-impl Drop for EncryptionSession<'_> {
-    fn drop(&mut self) {
-        let _ = self.close();
-    }
-}
-
-#[derive(Debug)]
-/// Structure encompassing parameters used for encrypting data
-///
-/// Using this structure, a caller is able to encrypt a plaintext
-/// by feeding it to the member functions in a piecewise fashion
-/// (or by doing so all at once). The encryption object can be reused
-/// to encrypt as many plaintexts as were initially specified by the
-/// call to `new()`
-pub struct Encryption<'a> {
-    session: EncryptionSession<'a>,
-}
-
-impl Encryption<'_> {
     pub fn new<'a>(creds: &Credentials, uses: usize) -> Result<Encryption<'a>> {
-        Ok(Encryption {
-            session: EncryptionSession::new(creds, uses)?,
-        })
+        let client = std::rc::Rc::new(Client::new(creds));
+        let host = std::rc::Rc::new(creds.host().clone());
+
+        let rsp = client.post(
+            &format!("{}/{}", host, ENCRYPTION_KEY_PATH),
+            "application/json".to_string(),
+            format!(
+                "{{\
+                   \"uses\": {}\
+                 }}",
+                uses
+            ),
+        )?;
+
+        match rsp.json::<NewEncryptionResponse>() {
+            Err(e) => return Err(Error::new(&e.to_string())),
+            Ok(msg) => Ok(Encryption {
+                session: session::Session::new(
+                    std::rc::Rc::clone(&client),
+                    std::rc::Rc::clone(&host),
+                    Some(msg.encryption_session),
+                    &msg.key_fingerprint,
+                    algorithm::get_by_name(&msg.security_model.algorithm)?,
+                    &msg.encrypted_private_key,
+                    &msg.wrapped_data_key,
+                    &msg.encrypted_data_key,
+                    msg.max_uses,
+                    creds.srsa(),
+                    Self::s_close,
+                )?,
+            }),
+        }
     }
 
     /// Begin a new encryption "session"
@@ -308,17 +244,6 @@ impl Encryption<'_> {
         return res;
     }
 
-    /// Clear the key and other session information
-    ///
-    /// In general, callers do not need to call this function as it is
-    /// invoked automatically when the Encryption object is dropped.
-    /// However, callers may call it themselves to clear session information
-    /// early and/or to determine if there was any error communicating with
-    /// the server during session destruction.
-    pub fn close(&mut self) -> Result<()> {
-        self.session.close()
-    }
-
     /// Encrypt a single plaintext in one shot
     ///
     /// This function is equivalent to calling `begin()`, `update(pt)`,
@@ -328,12 +253,6 @@ impl Encryption<'_> {
         ct.extend(self.update(pt)?);
         ct.extend(self.end()?);
         Ok(ct)
-    }
-}
-
-impl Drop for Encryption<'_> {
-    fn drop(&mut self) {
-        let _ = self.close();
     }
 }
 

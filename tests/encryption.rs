@@ -3,8 +3,8 @@ mod tests {
         #[test]
         fn no_encryption() -> ubiq::result::Result<()> {
             let creds = ubiq::credentials::Credentials::new(None, None)?;
-            let mut enc = ubiq::encryption::Encryption::new(&creds, 1)?;
-            enc.close()
+            let _ = ubiq::encryption::Encryption::new(&creds, 1)?;
+            Ok(())
         }
 
         #[test]

@@ -48,7 +48,7 @@
 //!  */
 //! ```
 
-use crate::algorithm::Algorithm;
+use crate::algorithm;
 use crate::base64;
 use crate::cipher;
 use crate::client::Client;
@@ -56,8 +56,7 @@ use crate::credentials::Credentials;
 use crate::error::Error;
 use crate::header::Header;
 use crate::result::Result;
-
-use rsa::pkcs8::DecodePrivateKey;
+use crate::session;
 
 const DECRYPTION_KEY_PATH: &str = "api/v0/decryption/key";
 
@@ -70,107 +69,6 @@ struct NewDecryptionResponse {
     encryption_session: Option<String>,
     key_fingerprint: String,
     wrapped_data_key: String,
-}
-
-#[derive(Debug)]
-struct DecryptionSessionKey {
-    raw: Vec<u8>,
-    enc: Vec<u8>,
-
-    fingerprint: String,
-
-    uses: usize,
-}
-
-struct DecryptionSession<'a> {
-    client: std::rc::Rc<Client>,
-    host: std::rc::Rc<String>,
-
-    id: Option<String>,
-
-    key: DecryptionSessionKey,
-
-    algo: &'a Algorithm<'a>,
-    ctx: Option<cipher::CipherCtx>,
-}
-
-impl DecryptionSession<'_> {
-    fn new<'a>(
-        client: std::rc::Rc<Client>,
-        host: std::rc::Rc<String>,
-        algo: usize,
-        edk: &[u8],
-        srsa: &str,
-    ) -> Result<DecryptionSession<'a>> {
-        let rsp = client.post(
-            &format!("{}/{}", host, DECRYPTION_KEY_PATH),
-            "application/json".to_string(),
-            format!(
-                "{{\
-                   \"encrypted_data_key\": \"{}\"\
-                 }}",
-                base64::encode(edk)
-            ),
-        )?;
-
-        match rsp.json::<NewDecryptionResponse>() {
-            Err(e) => Err(Error::new(&e.to_string())),
-            Ok(msg) => Ok(DecryptionSession {
-                client: client,
-                host: host,
-
-                id: msg.encryption_session,
-
-                key: DecryptionSessionKey {
-                    raw: rsa::RsaPrivateKey::from_pkcs8_encrypted_pem(
-                        &msg.encrypted_private_key,
-                        srsa.as_bytes(),
-                    )?
-                    .decrypt(
-                        rsa::oaep::Oaep::new::<sha1::Sha1>(),
-                        &base64::decode(&msg.wrapped_data_key)?,
-                    )?,
-                    enc: edk.to_vec(),
-
-                    fingerprint: msg.key_fingerprint,
-
-                    uses: 0,
-                },
-
-                algo: crate::algorithm::get_by_id(algo)?,
-                ctx: None,
-            }),
-        }
-    }
-
-    fn close(&mut self) -> Result<()> {
-        if self.key.uses > 0 && self.id.is_some() {
-            self.client.patch(
-                &format!(
-                    "{}/{}/{}/{}",
-                    self.host,
-                    DECRYPTION_KEY_PATH,
-                    self.key.fingerprint,
-                    self.id.as_ref().unwrap(),
-                ),
-                "application/json".to_string(),
-                format!(
-                    "{{\
-                       \"uses\": {}\
-                     }}",
-                    self.key.uses
-                ),
-            )?;
-        }
-
-        Ok(())
-    }
-}
-
-impl Drop for DecryptionSession<'_> {
-    fn drop(&mut self) {
-        let _ = self.close();
-    }
 }
 
 /// Structure encompassing parameters used for decrypting data
@@ -186,7 +84,7 @@ pub struct Decryption<'a> {
     host: std::rc::Rc<String>,
 
     srsa: String,
-    session: Option<DecryptionSession<'a>>,
+    session: Option<session::Session<'a>>,
 
     buf: Vec<u8>,
 }
@@ -203,6 +101,71 @@ impl Decryption<'_> {
 
             buf: Vec::new(),
         })
+    }
+
+    fn s_close(
+        client: &Client,
+        host: &String,
+        id: &Option<String>,
+        fp: &String,
+        uses: &session::SessionKeyUses,
+    ) -> Result<()> {
+        if uses.cur > 0 && id.as_ref().is_some() {
+            client.patch(
+                &format!(
+                    "{}/{}/{}/{}",
+                    host,
+                    DECRYPTION_KEY_PATH,
+                    fp,
+                    id.as_ref().unwrap(),
+                ),
+                "application/json".to_string(),
+                format!(
+                    "{{\
+                       \"uses\": {}\
+                     }}",
+                    uses.cur,
+                ),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn new_session<'a>(
+        &self,
+        algoid: usize,
+        edk: &[u8],
+    ) -> Result<session::Session<'a>> {
+        let s_edk = base64::encode(edk);
+
+        let rsp = self.client.post(
+            &format!("{}/{}", self.host, DECRYPTION_KEY_PATH),
+            "application/json".to_string(),
+            format!(
+                "{{\
+                   \"encrypted_data_key\": \"{}\"\
+                 }}",
+                s_edk,
+            ),
+        )?;
+
+        match rsp.json::<NewDecryptionResponse>() {
+            Err(e) => Err(Error::new(&e.to_string())),
+            Ok(msg) => Ok(session::Session::new(
+                std::rc::Rc::clone(&self.client),
+                std::rc::Rc::clone(&self.host),
+                msg.encryption_session,
+                &msg.key_fingerprint,
+                algorithm::get_by_id(algoid)?,
+                &msg.encrypted_private_key,
+                &msg.wrapped_data_key,
+                &s_edk,
+                0,
+                &self.srsa,
+                Self::s_close,
+            )?),
+        }
     }
 
     /// Begin a new decryption "session"
@@ -251,13 +214,8 @@ impl Decryption<'_> {
                 }
 
                 if self.session.is_none() {
-                    self.session = Some(DecryptionSession::new(
-                        std::rc::Rc::clone(&self.client),
-                        std::rc::Rc::clone(&self.host),
-                        hdr.algorithm,
-                        hdr.key,
-                        &self.srsa,
-                    )?);
+                    self.session =
+                        Some(self.new_session(hdr.algorithm, &hdr.key)?);
                 }
 
                 let mut s = self.session.as_mut().unwrap();
@@ -273,7 +231,7 @@ impl Decryption<'_> {
                     },
                 )?);
 
-                s.key.uses += 1;
+                s.key.uses.cur += 1;
 
                 buf.drain(0..hlen);
                 self.buf = buf;
@@ -330,21 +288,6 @@ impl Decryption<'_> {
         Ok(pt)
     }
 
-    /// Clear the key and other session information
-    ///
-    /// In general, callers do not need to call this function as it is
-    /// invoked automatically when the Decryption object is dropped.
-    /// However, callers may call it themselves to clear session information
-    /// early and/or to determine if there was any error communicating with
-    /// the server during session destruction.
-    pub fn close(&mut self) -> Result<()> {
-        let session = std::mem::replace(&mut self.session, None);
-        match session {
-            Some(mut s) => s.close(),
-            None => Ok(()),
-        }
-    }
-
     /// Decrypt a single ciphertext in one shot
     ///
     /// This function is equivalent to calling `begin()`, `update(ct)`,
@@ -354,12 +297,6 @@ impl Decryption<'_> {
         pt.extend(self.update(ct)?);
         pt.extend(self.end()?);
         Ok(pt)
-    }
-}
-
-impl Drop for Decryption<'_> {
-    fn drop(&mut self) {
-        let _ = self.close();
     }
 }
 
@@ -384,14 +321,14 @@ mod tests {
         let rec = dec.cipher(&ct)?;
         assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
         let fp1 = dec.session.as_ref().unwrap().key.fingerprint.clone();
-        let s1 = dec.session.as_ref().unwrap()
-            as *const crate::decryption::DecryptionSession<'_>;
+        let s1 =
+            dec.session.as_ref().unwrap() as *const crate::session::Session<'_>;
 
         let rec = dec.cipher(&ct)?;
         assert!(pt[..] == rec, "{}", "recovered plaintext does not match");
         let fp2 = dec.session.as_ref().unwrap().key.fingerprint.clone();
-        let s2 = dec.session.as_ref().unwrap()
-            as *const crate::decryption::DecryptionSession<'_>;
+        let s2 =
+            dec.session.as_ref().unwrap() as *const crate::session::Session<'_>;
 
         /*
          * we really want to compare the session.id, but
