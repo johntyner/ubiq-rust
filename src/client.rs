@@ -1,7 +1,7 @@
+use crate::base64;
 use crate::credentials::Credentials;
 use crate::error::Error;
 use crate::result::Result;
-use crate::support;
 
 use hmac::Mac;
 use sha2::Digest;
@@ -141,8 +141,7 @@ impl Client {
             hdrs.insert(
                 "Digest",
                 reqwest::header::HeaderValue::from_str(
-                    format!("SHA-512={}", support::base64::encode(&sum))
-                        .as_str(),
+                    format!("SHA-512={}", base64::encode(&sum)).as_str(),
                 )
                 .unwrap(),
             );
@@ -184,7 +183,7 @@ impl Client {
                         self.papi,
                         created,
                         headers.join(" "),
-                        support::base64::encode(&sum),
+                        base64::encode(&sum),
                     )
                     .as_str(),
                 )

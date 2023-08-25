@@ -29,6 +29,18 @@ pub mod encryption;
 pub(crate) mod header;
 pub(crate) mod support;
 
+pub(crate) mod base64 {
+    use base64::Engine;
+
+    pub fn decode(s: &str) -> crate::result::Result<Vec<u8>> {
+        Ok(base64::engine::general_purpose::STANDARD.decode(s)?)
+    }
+
+    pub fn encode(v: &[u8]) -> String {
+        base64::engine::general_purpose::STANDARD.encode(v)
+    }
+}
+
 /// Common result interface used by the library
 pub mod result {
     pub type Result<T> = std::result::Result<T, crate::error::Error>;

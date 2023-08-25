@@ -49,6 +49,7 @@
 //! ```
 
 use crate::algorithm::Algorithm;
+use crate::base64;
 use crate::client::Client;
 use crate::credentials::Credentials;
 use crate::error::Error;
@@ -108,7 +109,7 @@ impl DecryptionSession<'_> {
                 "{{\
                    \"encrypted_data_key\": \"{}\"\
                  }}",
-                support::base64::encode(edk)
+                base64::encode(edk)
             ),
         )?;
 
@@ -127,7 +128,7 @@ impl DecryptionSession<'_> {
                     )?
                     .decrypt(
                         rsa::oaep::Oaep::new::<sha1::Sha1>(),
-                        &support::base64::decode(&msg.wrapped_data_key)?,
+                        &base64::decode(&msg.wrapped_data_key)?,
                     )?,
                     enc: edk.to_vec(),
 

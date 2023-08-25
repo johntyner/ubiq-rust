@@ -56,6 +56,7 @@
 
 use crate::algorithm;
 use crate::algorithm::Algorithm;
+use crate::base64;
 use crate::client::Client;
 use crate::credentials::Credentials;
 use crate::error::Error;
@@ -152,9 +153,9 @@ impl EncryptionSession<'_> {
                 )?
                 .decrypt(
                     rsa::oaep::Oaep::new::<sha1::Sha1>(),
-                    &support::base64::decode(&msg.wrapped_data_key)?,
+                    &base64::decode(&msg.wrapped_data_key)?,
                 )?,
-                enc: support::base64::decode(&msg.encrypted_data_key)?,
+                enc: base64::decode(&msg.encrypted_data_key)?,
 
                 fingerprint: msg.key_fingerprint,
 
