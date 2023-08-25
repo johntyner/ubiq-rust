@@ -74,4 +74,10 @@ pub mod error {
             Error::new(&e.to_string())
         }
     }
+
+    impl From<base64::DecodeError> for Error {
+        fn from(e: base64::DecodeError) -> Self {
+            Error::new(&e.to_string())
+        }
+    }
 }

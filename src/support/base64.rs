@@ -1,7 +1,9 @@
+use base64::Engine;
+
 pub fn decode(s: &str) -> crate::result::Result<Vec<u8>> {
-    Ok(openssl::base64::decode_block(s)?)
+    Ok(base64::engine::general_purpose::STANDARD.decode(s)?)
 }
 
 pub fn encode(v: &[u8]) -> String {
-    openssl::base64::encode_block(v)
+    base64::engine::general_purpose::STANDARD.encode(v)
 }
