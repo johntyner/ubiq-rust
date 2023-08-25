@@ -3,6 +3,8 @@ use crate::error::Error;
 use crate::result::Result;
 use crate::support;
 
+use sha2::Digest;
+
 type Response = reqwest::blocking::Response;
 
 #[derive(Debug)]
@@ -14,7 +16,7 @@ pub struct Client {
 }
 
 pub fn sign_header(
-    digest: &mut support::hmac::HmacCtx,
+    dig: &mut support::hmac::HmacCtx,
     headers: &mut Vec<String>,
     header: &str,
     value: &str,
@@ -22,7 +24,7 @@ pub fn sign_header(
     let lh = header.to_lowercase();
     let m = format!("{}: {}\n", lh, value);
 
-    digest.update(m.as_bytes())?;
+    dig.update(m.as_bytes())?;
     headers.push(lh);
 
     Ok(())
@@ -103,17 +105,17 @@ impl Client {
             Some(q) => reqtgt = format!("{}?{}", reqtgt, q),
         }
 
-        let mut digest = support::digest::DigestCtx::new("sha512")?;
+        let mut dig = sha2::Sha512::new();
         match req.body() {
             None => (),
             Some(body) => match body.as_bytes() {
                 None => {
                     return Err(Error::new("streaming requests not supported"));
                 }
-                Some(b) => digest.update(b)?,
+                Some(b) => dig.update(b),
             },
         }
-        let sum = digest.finalize()?;
+        let sum = dig.finalize();
 
         /* scope changes to the headers */
         {

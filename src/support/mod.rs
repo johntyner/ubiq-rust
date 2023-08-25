@@ -3,7 +3,6 @@ use crate::result::Result;
 pub mod base64;
 pub mod cipher;
 pub mod decryption;
-pub mod digest;
 pub mod encryption;
 pub mod hmac;
 
