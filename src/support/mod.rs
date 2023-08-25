@@ -6,9 +6,10 @@ pub mod decryption;
 pub mod encryption;
 
 use rsa::pkcs8::DecodePrivateKey;
+use rand::RngCore;
 
 pub fn getrandom(buf: &mut [u8]) -> Result<()> {
-    Ok(openssl::rand::rand_bytes(buf)?)
+    Ok(rand::thread_rng().fill_bytes(buf))
 }
 
 pub fn unwrap_data_key(wdk: &[u8], epk: &str, srsa: &str) -> Result<Vec<u8>> {
