@@ -22,12 +22,12 @@
 //! [`platform`]: https://dashboard.ubiqsecurity.com/login
 
 pub(crate) mod algorithm;
+pub(crate) mod cipher;
 pub(crate) mod client;
 pub mod credentials;
 pub mod decryption;
 pub mod encryption;
 pub(crate) mod header;
-pub(crate) mod support;
 
 pub(crate) mod base64 {
     use base64::Engine;

@@ -57,12 +57,12 @@
 use crate::algorithm;
 use crate::algorithm::Algorithm;
 use crate::base64;
+use crate::cipher;
 use crate::client::Client;
 use crate::credentials::Credentials;
 use crate::error::Error;
 use crate::header::Header;
 use crate::result::Result;
-use crate::support;
 
 use rand::RngCore;
 use rsa::pkcs8::DecodePrivateKey;
@@ -112,7 +112,7 @@ struct EncryptionSession<'a> {
     key: EncryptionSessionKey,
 
     algo: &'a Algorithm<'a>,
-    ctx: Option<support::cipher::CipherCtx<'a>>,
+    ctx: Option<cipher::CipherCtx>,
 }
 
 impl EncryptionSession<'_> {
@@ -261,8 +261,9 @@ impl Encryption<'_> {
         );
         let ct = hdr.serialize();
 
-        self.session.ctx = Some(support::encryption::init(
-            self.session.algo,
+        self.session.ctx = Some(cipher::CipherCtx::new(
+            cipher::CipherOp::Encrypt,
+            self.session.algo.name,
             &self.session.key.raw,
             &iv,
             if (hdr.flags & crate::header::V0_FLAG_AAD) != 0 {
@@ -287,7 +288,7 @@ impl Encryption<'_> {
             return Err(Error::new("encryption not yet started"));
         }
 
-        support::encryption::update(self.session.ctx.as_mut().unwrap(), pt)
+        self.session.ctx.as_mut().unwrap().update(pt)
     }
 
     /// End an encryption "session"
@@ -301,8 +302,7 @@ impl Encryption<'_> {
             return Err(Error::new("encryption not yet started"));
         }
 
-        let res =
-            support::encryption::finalize(self.session.ctx.as_mut().unwrap());
+        let res = self.session.ctx.as_mut().unwrap().finalize(None);
         self.session.ctx = None;
 
         return res;

@@ -50,12 +50,12 @@
 
 use crate::algorithm::Algorithm;
 use crate::base64;
+use crate::cipher;
 use crate::client::Client;
 use crate::credentials::Credentials;
 use crate::error::Error;
 use crate::header::Header;
 use crate::result::Result;
-use crate::support;
 
 use rsa::pkcs8::DecodePrivateKey;
 
@@ -91,7 +91,7 @@ struct DecryptionSession<'a> {
     key: DecryptionSessionKey,
 
     algo: &'a Algorithm<'a>,
-    ctx: Option<support::cipher::CipherCtx<'a>>,
+    ctx: Option<cipher::CipherCtx>,
 }
 
 impl DecryptionSession<'_> {
@@ -261,8 +261,9 @@ impl Decryption<'_> {
                 }
 
                 let mut s = self.session.as_mut().unwrap();
-                s.ctx = Some(support::decryption::init(
-                    s.algo,
+                s.ctx = Some(cipher::CipherCtx::new(
+                    cipher::CipherOp::Decrypt,
+                    s.algo.name,
                     &s.key.raw,
                     hdr.iv,
                     if (hdr.flags & crate::header::V0_FLAG_AAD) != 0 {
@@ -288,12 +289,7 @@ impl Decryption<'_> {
 
             if self.buf.len() > s.algo.len.tag {
                 let sz = self.buf.len() - s.algo.len.tag;
-
-                pt = support::decryption::update(
-                    &mut s.ctx.as_mut().unwrap(),
-                    &self.buf[0..sz],
-                )?;
-
+                pt = s.ctx.as_mut().unwrap().update(&self.buf[0..sz])?;
                 self.buf.drain(0..sz);
             }
         }
@@ -321,14 +317,11 @@ impl Decryption<'_> {
         {
             let s = self.session.as_mut().unwrap();
 
-            pt = support::decryption::finalize(
-                s.ctx.as_mut().unwrap(),
-                if self.buf.len() > 0 {
-                    Some(&self.buf)
-                } else {
-                    None
-                },
-            )?;
+            pt = s.ctx.as_mut().unwrap().finalize(if self.buf.len() > 0 {
+                Some(&self.buf)
+            } else {
+                None
+            })?;
 
             self.buf.truncate(0);
             s.ctx = None;
