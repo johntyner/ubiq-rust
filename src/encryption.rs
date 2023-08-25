@@ -63,6 +63,9 @@ use crate::header::Header;
 use crate::result::Result;
 use crate::support;
 
+use rand::RngCore;
+use rsa::pkcs8::DecodePrivateKey;
+
 const ENCRYPTION_KEY_PATH: &str = "api/v0/encryption/key";
 
 #[derive(serde::Deserialize)]
@@ -143,10 +146,13 @@ impl EncryptionSession<'_> {
             id: msg.encryption_session,
 
             key: EncryptionSessionKey {
-                raw: support::unwrap_data_key(
-                    &support::base64::decode(&msg.wrapped_data_key)?,
+                raw: rsa::RsaPrivateKey::from_pkcs8_encrypted_pem(
                     &msg.encrypted_private_key,
-                    creds.srsa(),
+                    creds.srsa().as_bytes(),
+                )?
+                .decrypt(
+                    rsa::oaep::Oaep::new::<sha1::Sha1>(),
+                    &support::base64::decode(&msg.wrapped_data_key)?,
                 )?,
                 enc: support::base64::decode(&msg.encrypted_data_key)?,
 
@@ -240,7 +246,7 @@ impl Encryption<'_> {
 
         let mut iv = Vec::<u8>::new();
         iv.resize(self.session.algo.len.iv, 0);
-        support::getrandom(&mut iv[..])?;
+        rand::thread_rng().fill_bytes(&mut iv);
 
         let hdr = Header::new(
             if self.session.algo.len.tag > 0 {

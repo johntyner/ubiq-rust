@@ -56,6 +56,8 @@ use crate::header::Header;
 use crate::result::Result;
 use crate::support;
 
+use rsa::pkcs8::DecodePrivateKey;
+
 const DECRYPTION_KEY_PATH: &str = "api/v0/decryption/key";
 
 #[derive(serde::Deserialize)]
@@ -119,10 +121,13 @@ impl DecryptionSession<'_> {
                 id: msg.encryption_session,
 
                 key: DecryptionSessionKey {
-                    raw: support::unwrap_data_key(
-                        &support::base64::decode(&msg.wrapped_data_key)?,
+                    raw: rsa::RsaPrivateKey::from_pkcs8_encrypted_pem(
                         &msg.encrypted_private_key,
-                        srsa,
+                        srsa.as_bytes(),
+                    )?
+                    .decrypt(
+                        rsa::oaep::Oaep::new::<sha1::Sha1>(),
+                        &support::base64::decode(&msg.wrapped_data_key)?,
                     )?,
                     enc: edk.to_vec(),
 
